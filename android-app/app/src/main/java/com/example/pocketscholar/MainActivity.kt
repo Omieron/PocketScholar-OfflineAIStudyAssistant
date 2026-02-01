@@ -63,7 +63,7 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.padding(innerPadding)
                     ) {
                         composable(AppScreen.Documents.name) {
-                            DocumentsScreen(onAddDocument = { /* TODO: PDF picker */ })
+                            DocumentsScreen()
                         }
                         composable(AppScreen.Chat.name) {
                             ChatScreen()
