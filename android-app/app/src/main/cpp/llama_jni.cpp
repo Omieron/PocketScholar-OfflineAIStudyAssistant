@@ -9,11 +9,26 @@
 #include <cstring>
 
 #include "llama.h"
+#include "ggml.h"
 #include "ggml-backend.h"
 
 #define LOG_TAG "LlamaJNI"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+
+static int ggml_level_to_android(enum ggml_log_level level) {
+    switch (level) {
+        case GGML_LOG_LEVEL_ERROR: return ANDROID_LOG_ERROR;
+        case GGML_LOG_LEVEL_WARN:  return ANDROID_LOG_WARN;
+        case GGML_LOG_LEVEL_INFO:  return ANDROID_LOG_INFO;
+        case GGML_LOG_LEVEL_DEBUG: return ANDROID_LOG_DEBUG;
+        default:                   return ANDROID_LOG_INFO;
+    }
+}
+
+static void llama_log_to_android(enum ggml_log_level level, const char* text, void*) {
+    __android_log_write(ggml_level_to_android(level), LOG_TAG, text);
+}
 
 static llama_model* g_model = nullptr;
 static llama_context* g_ctx = nullptr;
@@ -23,8 +38,9 @@ static bool g_backend_init = false;
 extern "C" {
 
 JNIEXPORT void JNICALL
-Java_com_example_pocketscholar_engine_LlamaEngine_init(JNIEnv* env, jclass, jstring nativeLibDir) {
+Java_com_example_pocketscholar_engine_LlamaEngine_init(JNIEnv* env, jobject, jstring nativeLibDir) {
     if (g_backend_init) return;
+    llama_log_set(llama_log_to_android, nullptr);
     const char* path = env->GetStringUTFChars(nativeLibDir, nullptr);
     ggml_backend_load_all_from_path(path);
     env->ReleaseStringUTFChars(nativeLibDir, path);
@@ -34,7 +50,7 @@ Java_com_example_pocketscholar_engine_LlamaEngine_init(JNIEnv* env, jclass, jstr
 }
 
 JNIEXPORT jboolean JNICALL
-Java_com_example_pocketscholar_engine_LlamaEngine_loadModel(JNIEnv* env, jclass, jstring modelPath) {
+Java_com_example_pocketscholar_engine_LlamaEngine_loadModel(JNIEnv* env, jobject, jstring modelPath) {
     if (!g_backend_init) {
         LOGE("Call init() first");
         return JNI_FALSE;
@@ -67,7 +83,7 @@ Java_com_example_pocketscholar_engine_LlamaEngine_loadModel(JNIEnv* env, jclass,
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_example_pocketscholar_engine_LlamaEngine_prompt(JNIEnv* env, jclass, jstring promptJ) {
+Java_com_example_pocketscholar_engine_LlamaEngine_prompt(JNIEnv* env, jobject, jstring promptJ) {
     if (!g_model || !g_ctx) {
         return env->NewStringUTF("[Model not loaded. Call loadModel() first.]");
     }
@@ -92,7 +108,7 @@ Java_com_example_pocketscholar_engine_LlamaEngine_prompt(JNIEnv* env, jclass, js
     llama_sampler* smpl = llama_sampler_chain_init(sparams);
     llama_sampler_chain_add(smpl, llama_sampler_init_greedy());
 
-    const int n_predict = 256;
+    const int n_predict = 32;  // 256 for production; 32 for emulator testing
     std::string result;
     llama_batch batch = llama_batch_get_one(tokens.data(), (int32_t)tokens.size());
 
@@ -112,7 +128,7 @@ Java_com_example_pocketscholar_engine_LlamaEngine_prompt(JNIEnv* env, jclass, js
 }
 
 JNIEXPORT void JNICALL
-Java_com_example_pocketscholar_engine_LlamaEngine_unload(JNIEnv*, jclass) {
+Java_com_example_pocketscholar_engine_LlamaEngine_unload(JNIEnv*, jobject) {
     if (g_ctx) { llama_free(g_ctx); g_ctx = nullptr; }
     if (g_model) { llama_model_free(g_model); g_model = nullptr; }
     LOGI("Model unloaded");

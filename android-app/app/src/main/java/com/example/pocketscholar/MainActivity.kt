@@ -10,7 +10,6 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -24,17 +23,18 @@ import com.example.pocketscholar.ui.screens.ChatScreen
 import com.example.pocketscholar.ui.screens.DocumentsScreen
 import com.example.pocketscholar.ui.screens.StatsScreen
 import com.example.pocketscholar.ui.theme.PocketScholarTheme
+import com.example.pocketscholar.engine.LlamaEngine
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        LlamaEngine.init(applicationContext)
         setContent {
             PocketScholarTheme {
                 val navController = rememberNavController()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentDestination = navBackStackEntry?.destination
-
                 Scaffold(
                     bottomBar = {
                         NavigationBar {
