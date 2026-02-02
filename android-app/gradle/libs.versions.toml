@@ -11,6 +11,7 @@ kotlin = "2.0.21"
 composeBom = "2024.09.00"
 navigationCompose = "2.7.7"
 coroutines = "1.7.3"
+ksp = "2.0.21-1.0.26"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -35,4 +36,5 @@ kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 

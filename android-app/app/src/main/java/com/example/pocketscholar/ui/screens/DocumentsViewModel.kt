@@ -8,6 +8,10 @@ import com.example.pocketscholar.data.Document
 import com.example.pocketscholar.data.DocumentRepository
 import com.example.pocketscholar.data.PdfChunkExtractor
 import com.example.pocketscholar.data.copyPdfToAppStorage
+import com.example.pocketscholar.data.db.AppDatabase
+import com.example.pocketscholar.data.db.ChunkEntity
+import com.example.pocketscholar.data.db.EmbeddingBlob
+import com.example.pocketscholar.engine.EmbeddingEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.withContext
@@ -26,6 +30,8 @@ data class DocumentsUiState(
 
 class DocumentsViewModel(application: Application) : AndroidViewModel(application) {
     private val repo = DocumentRepository(application)
+    private val chunkDao = AppDatabase.getInstance(application).chunkDao()
+    private val embeddingEngine = EmbeddingEngine(application)
 
     private val _uiState = MutableStateFlow(DocumentsUiState())
     val uiState: StateFlow<DocumentsUiState> = _uiState.asStateFlow()
@@ -70,14 +76,25 @@ class DocumentsViewModel(application: Application) : AndroidViewModel(applicatio
                 it.copy(processingDocumentId = docId, error = null, lastChunkCount = null)
             }
             try {
-                val chunks = withContext(Dispatchers.IO) {
-                    PdfChunkExtractor.extract(doc.path, doc.id)
+                val count = withContext(Dispatchers.IO) {
+                    val chunks = PdfChunkExtractor.extract(doc.path, doc.id)
+                    val entities = chunks.map { chunk ->
+                        val embedding = embeddingEngine.embed(chunk.text)
+                        ChunkEntity(
+                            id = chunk.id,
+                            documentId = chunk.documentId,
+                            pageNumber = chunk.pageNumber,
+                            chunkIndex = chunk.chunkIndex,
+                            text = chunk.text,
+                            embedding = EmbeddingBlob.floatArrayToBytes(embedding)
+                        )
+                    }
+                    chunkDao.deleteByDocumentId(docId)
+                    chunkDao.insertAll(entities)
+                    entities.size
                 }
                 _uiState.update {
-                    it.copy(
-                        processingDocumentId = null,
-                        lastChunkCount = chunks.size
-                    )
+                    it.copy(processingDocumentId = null, lastChunkCount = count)
                 }
             } catch (e: Exception) {
                 _uiState.update {
