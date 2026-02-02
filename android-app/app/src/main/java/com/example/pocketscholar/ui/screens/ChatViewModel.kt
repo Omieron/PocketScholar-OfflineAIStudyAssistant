@@ -47,7 +47,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         viewModelScope.launch {
-            // Placeholder: model bağlanınca burada RAG/LLM çağrılacak
+            // Placeholder: RAG/LLM will be called here once the model is wired in
             val placeholderReply = ChatMessage(
                 id = "assistant_${System.currentTimeMillis()}",
                 role = "assistant",

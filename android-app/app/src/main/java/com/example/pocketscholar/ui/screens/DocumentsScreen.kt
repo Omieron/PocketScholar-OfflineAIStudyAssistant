@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FloatingActionButton
@@ -23,6 +24,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -37,6 +40,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.pocketscholar.data.Document
 
 @Composable
 fun DocumentsScreen(
@@ -57,6 +61,14 @@ fun DocumentsScreen(
         errorMessage?.let { msg ->
             snackbarHostState.showSnackbar(msg)
             viewModel.clearError()
+        }
+    }
+
+    val lastChunkCount = uiState.lastChunkCount
+    LaunchedEffect(lastChunkCount) {
+        lastChunkCount?.let { count ->
+            snackbarHostState.showSnackbar("$count chunk çıkarıldı")
+            viewModel.clearLastChunkCount()
         }
     }
 
@@ -111,7 +123,9 @@ fun DocumentsScreen(
                 ) {
                     items(uiState.documents, key = { it.id }) { doc ->
                         DocumentItem(
-                            name = doc.name,
+                            doc = doc,
+                            isProcessing = uiState.processingDocumentId == doc.id,
+                            onProcess = { viewModel.processDocument(doc.id) },
                             onDelete = { viewModel.removeDocument(doc.id) }
                         )
                     }
@@ -123,7 +137,9 @@ fun DocumentsScreen(
 
 @Composable
 private fun DocumentItem(
-    name: String,
+    doc: Document,
+    isProcessing: Boolean,
+    onProcess: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -146,13 +162,31 @@ private fun DocumentItem(
                 tint = MaterialTheme.colorScheme.primary
             )
             Text(
-                text = name,
+                text = doc.name,
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f).padding(horizontal = 12.dp)
             )
+            if (isProcessing) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    strokeWidth = 2.dp
+                )
+            } else {
+                Button(
+                    onClick = onProcess,
+                    modifier = Modifier.padding(end = 4.dp)
+                ) {
+                    Icon(
+                        Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text("İşle", modifier = Modifier.padding(start = 4.dp))
+                }
+            }
             IconButton(onClick = onDelete) {
                 Icon(Icons.Default.Delete, contentDescription = "Remove")
             }

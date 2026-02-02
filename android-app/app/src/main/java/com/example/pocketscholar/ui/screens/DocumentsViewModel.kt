@@ -6,8 +6,11 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.pocketscholar.data.Document
 import com.example.pocketscholar.data.DocumentRepository
+import com.example.pocketscholar.data.PdfChunkExtractor
 import com.example.pocketscholar.data.copyPdfToAppStorage
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -16,7 +19,9 @@ import kotlinx.coroutines.launch
 data class DocumentsUiState(
     val documents: List<Document> = emptyList(),
     val isLoading: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val processingDocumentId: String? = null,
+    val lastChunkCount: Int? = null
 )
 
 class DocumentsViewModel(application: Application) : AndroidViewModel(application) {
@@ -56,5 +61,36 @@ class DocumentsViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun clearError() {
         _uiState.update { it.copy(error = null) }
+    }
+
+    fun processDocument(docId: String) {
+        val doc = repo.getDocuments().find { it.id == docId } ?: return
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(processingDocumentId = docId, error = null, lastChunkCount = null)
+            }
+            try {
+                val chunks = withContext(Dispatchers.IO) {
+                    PdfChunkExtractor.extract(doc.path, doc.id)
+                }
+                _uiState.update {
+                    it.copy(
+                        processingDocumentId = null,
+                        lastChunkCount = chunks.size
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        processingDocumentId = null,
+                        error = "PDF işlenemedi: ${e.message}"
+                    )
+                }
+            }
+        }
+    }
+
+    fun clearLastChunkCount() {
+        _uiState.update { it.copy(lastChunkCount = null) }
     }
 }
