@@ -2,42 +2,109 @@ package com.example.pocketscholar.engine
 
 import android.content.Context
 import android.util.Log
+import com.google.android.gms.tasks.Tasks
+import com.google.android.gms.tflite.java.TfLite
+import org.tensorflow.lite.InterpreterApi
+import org.tensorflow.lite.InterpreterApi.Options.TfLiteRuntime
 import java.io.File
 import java.io.FileOutputStream
+import java.nio.channels.FileChannel
 
 private const val MODEL_ASSET = "embedding_model.tflite"
-const val EMBEDDING_DIM = 512
+const val EMBEDDING_DIM = 384 // Default
 private const val TAG = "EmbeddingEngine"
 
 /**
  * Embeds text into a fixed-size vector for vector search.
- * Placeholder: returns zero vectors until a TFLite embedding model is added to assets.
- * Pipeline (chunk -> embed -> save to Room) runs; vector search will work once real embeddings are used.
- *
- * To enable real embeddings: add Universal Sentence Encoder TFLite to assets as [MODEL_ASSET]
- * and integrate TFLite TextEmbedder (org.tensorflow:tensorflow-lite-task-text) in [embed].
+ * Uses Google Play Services TFLite (InterpreterApi).
  */
 class EmbeddingEngine(private val context: Context) {
 
     private var dim: Int = EMBEDDING_DIM
+    private var interpreter: InterpreterApi? = null
+    private val modelFile: File? = copyAssetToCache(MODEL_ASSET)
+    private var initFailed: Boolean = false
 
     init {
-        val modelFile = copyAssetToCache(MODEL_ASSET)
-        if (modelFile != null) {
-            Log.d(TAG, "Model file found; TFLite integration TODO. Using zero vectors.")
+        if (modelFile == null) {
+            Log.w(TAG, "No $MODEL_ASSET in assets; using zero vectors.")
         } else {
-            Log.w(TAG, "No $MODEL_ASSET in assets; using zero vectors. Add USE Lite .tflite for real embeddings.")
+            TfLite.initialize(context)
+                .addOnSuccessListener { tryCreateInterpreter() }
+                .addOnFailureListener { e ->
+                    initFailed = true
+                    Log.e(TAG, "TfLite.initialize failed", e)
+                }
+        }
+    }
+
+    private fun tryCreateInterpreter() {
+        val file = modelFile ?: return
+        try {
+            val buffer = file.inputStream().use { fis ->
+                fis.channel.map(FileChannel.MapMode.READ_ONLY, 0, file.length())
+            }
+            val options = InterpreterApi.Options().setRuntime(TfLiteRuntime.FROM_SYSTEM_ONLY)
+            val interp = InterpreterApi.create(buffer, options)
+            
+            // Auto-detect dimension from output tensor
+            if (interp.outputTensorCount > 0) {
+                val outputTensor = interp.getOutputTensor(0)
+                val shape = outputTensor.shape()
+                dim = if (shape.size >= 2) shape[shape.size - 1].toInt() else shape[0].toInt()
+            }
+            
+            interpreter = interp
+            Log.i(TAG, "TFLite model loaded via Play Services; dim=$dim")
+        } catch (e: Exception) {
+            initFailed = true
+            Log.e(TAG, "Failed to load TFLite model", e)
+        }
+    }
+
+    private fun ensureInterpreter() {
+        if (interpreter != null || initFailed) return
+        try {
+            Tasks.await(TfLite.initialize(context))
+            if (interpreter == null) tryCreateInterpreter()
+        } catch (e: Exception) {
+            initFailed = true
+            Log.e(TAG, "ensureInterpreter failed", e)
         }
     }
 
     fun embeddingDimension(): Int = dim
 
-    /**
-     * Returns embedding vector for [text]. Placeholder: zero vector of [embeddingDimension].
-     */
+    fun isModelLoaded(): Boolean = interpreter != null
+
     fun embed(text: String): FloatArray {
         if (text.isBlank()) return FloatArray(dim) { 0f }
-        return FloatArray(dim) { 0f }
+        ensureInterpreter()
+        val interp = interpreter
+        if (interp == null) {
+            return FloatArray(dim) { 0f }
+        }
+        return try {
+            val result = runInference(interp, text)
+            result
+        } catch (e: Exception) {
+            Log.e(TAG, "Embedding inference failed", e)
+            FloatArray(dim) { 0f }
+        }
+    }
+
+    private fun runInference(interp: InterpreterApi, text: String): FloatArray {
+        val numInputs = interp.inputTensorCount
+        val inputs: Array<Any> = when {
+            numInputs >= 3 -> arrayOf(arrayOf(text), arrayOf(""), arrayOf(""))
+            else -> arrayOf(arrayOf(text))
+        }
+        val outputTensor = interp.getOutputTensor(0)
+        val shape = outputTensor.shape()
+        val outDim = if (shape.size >= 2) shape[shape.size - 1].toInt() else shape[0].toInt()
+        val output = Array(1) { FloatArray(outDim) }
+        interp.runForMultipleInputsOutputs(inputs, mapOf(0 to output))
+        return output[0]
     }
 
     private fun copyAssetToCache(assetName: String): File? {
@@ -54,3 +121,11 @@ class EmbeddingEngine(private val context: Context) {
         }
     }
 }
+
+
+
+
+
+
+
+

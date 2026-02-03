@@ -20,4 +20,7 @@ interface ChunkDao {
 
     @Query("DELETE FROM chunks WHERE documentId = :documentId")
     suspend fun deleteByDocumentId(documentId: String): @JvmSuppressWildcards Int
+
+    @Query("DELETE FROM chunks")
+    suspend fun deleteAll(): @JvmSuppressWildcards Int
 }

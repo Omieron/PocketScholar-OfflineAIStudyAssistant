@@ -25,7 +25,10 @@ data class DocumentsUiState(
     val isLoading: Boolean = false,
     val error: String? = null,
     val processingDocumentId: String? = null,
-    val lastChunkCount: Int? = null
+    val lastChunkCount: Int? = null,
+    val chunksCleared: Boolean = false,
+    /** Shown when embedding model failed to load; all chunk embeddings will be zeros. */
+    val embeddingWarning: String? = null
 )
 
 class DocumentsViewModel(application: Application) : AndroidViewModel(application) {
@@ -38,6 +41,15 @@ class DocumentsViewModel(application: Application) : AndroidViewModel(applicatio
 
     init {
         loadDocuments()
+        // Warm up embedding engine on background; warn if model failed (all zeros).
+        viewModelScope.launch(Dispatchers.IO) {
+            val warmup = embeddingEngine.embed("warmup")
+            if (!embeddingEngine.isModelLoaded() || warmup.all { it == 0f }) {
+                _uiState.update {
+                    it.copy(embeddingWarning = "Embedding model yüklenemedi. Chunk'lar sıfır vektörle kaydedilecek; semantic arama çalışmaz. Logcat'te 'EmbeddingEngine' veya 'TFSentencepieceTokenizeOp' arayın. README'deki uyumlu modeli kullanın.")
+                }
+            }
+        }
     }
 
     fun loadDocuments() {
@@ -109,5 +121,21 @@ class DocumentsViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun clearLastChunkCount() {
         _uiState.update { it.copy(lastChunkCount = null) }
+    }
+
+    /** Deletes all chunks from the vector store (e.g. to re-process with a new embedding model). */
+    fun clearAllChunks() {
+        viewModelScope.launch(Dispatchers.IO) {
+            chunkDao.deleteAll()
+            _uiState.update { it.copy(chunksCleared = true) }
+        }
+    }
+
+    fun clearChunksClearedFlag() {
+        _uiState.update { it.copy(chunksCleared = false) }
+    }
+
+    fun clearEmbeddingWarning() {
+        _uiState.update { it.copy(embeddingWarning = null) }
     }
 }
