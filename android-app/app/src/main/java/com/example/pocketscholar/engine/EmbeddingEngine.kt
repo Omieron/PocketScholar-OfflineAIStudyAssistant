@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.google.android.gms.tasks.Tasks
 import com.google.android.gms.tflite.java.TfLite
+import org.tensorflow.lite.DataType
 import org.tensorflow.lite.InterpreterApi
 import org.tensorflow.lite.InterpreterApi.Options.TfLiteRuntime
 import java.io.File
@@ -11,12 +12,13 @@ import java.io.FileOutputStream
 import java.nio.channels.FileChannel
 
 private const val MODEL_ASSET = "embedding_model.tflite"
-const val EMBEDDING_DIM = 384 // Default
+const val EMBEDDING_DIM = 384 // INT32 model default; auto-detected when model loads
 private const val TAG = "EmbeddingEngine"
 
 /**
  * Embeds text into a fixed-size vector for vector search.
  * Uses Google Play Services TFLite (InterpreterApi).
+ * If the model expects INT32 input (token IDs), uses BertWordPieceTokenizer with vocab.txt.
  */
 class EmbeddingEngine(private val context: Context) {
 
@@ -24,6 +26,10 @@ class EmbeddingEngine(private val context: Context) {
     private var interpreter: InterpreterApi? = null
     private val modelFile: File? = copyAssetToCache(MODEL_ASSET)
     private var initFailed: Boolean = false
+
+    private var useInt32Input: Boolean = false
+    private var maxSeqLen: Int = 128
+    private var tokenizer: BertWordPieceTokenizer? = null
 
     init {
         if (modelFile == null) {
@@ -52,6 +58,21 @@ class EmbeddingEngine(private val context: Context) {
                 val outputTensor = interp.getOutputTensor(0)
                 val shape = outputTensor.shape()
                 dim = if (shape.size >= 2) shape[shape.size - 1].toInt() else shape[0].toInt()
+            }
+
+            // Detect INT32 input (token IDs) vs STRING input
+            if (interp.inputTensorCount > 0) {
+                val input0 = interp.getInputTensor(0)
+                useInt32Input = (input0.dataType() == DataType.INT32)
+                val shape = input0.shape()
+                if (shape.isNotEmpty()) maxSeqLen = shape.last().toInt().coerceAtLeast(1)
+                if (useInt32Input) {
+                    tokenizer = BertWordPieceTokenizer(context)
+                    if (!tokenizer!!.isLoaded())
+                        Log.w(TAG, "INT32 model but vocab.txt missing; embeddings will fail until vocab is added.")
+                    else
+                        Log.i(TAG, "TFLite INT32 model; using WordPiece tokenizer, maxSeqLen=$maxSeqLen")
+                }
             }
             
             interpreter = interp
@@ -95,14 +116,28 @@ class EmbeddingEngine(private val context: Context) {
 
     private fun runInference(interp: InterpreterApi, text: String): FloatArray {
         val numInputs = interp.inputTensorCount
-        val inputs: Array<Any> = when {
-            numInputs >= 3 -> arrayOf(arrayOf(text), arrayOf(""), arrayOf(""))
-            else -> arrayOf(arrayOf(text))
-        }
         val outputTensor = interp.getOutputTensor(0)
         val shape = outputTensor.shape()
         val outDim = if (shape.size >= 2) shape[shape.size - 1].toInt() else shape[0].toInt()
         val output = Array(1) { FloatArray(outDim) }
+
+        val inputs: Array<Any> = if (useInt32Input && tokenizer != null && tokenizer!!.isLoaded()) {
+            val (inputIds, actualLen) = tokenizer!!.tokenizeToIds(text, maxSeqLen)
+            val inputIds2D = Array(1) { inputIds }
+            if (numInputs >= 3) {
+                val mask2D = Array(1) { tokenizer!!.attentionMask(actualLen, maxSeqLen) }
+                val segment2D = Array(1) { tokenizer!!.segmentIds(maxSeqLen) }
+                arrayOf(inputIds2D, mask2D, segment2D)
+            } else {
+                arrayOf(inputIds2D)
+            }
+        } else {
+            when {
+                numInputs >= 3 -> arrayOf(arrayOf(text), arrayOf(""), arrayOf(""))
+                else -> arrayOf(arrayOf(text))
+            }
+        }
+
         interp.runForMultipleInputsOutputs(inputs, mapOf(0 to output))
         return output[0]
     }
