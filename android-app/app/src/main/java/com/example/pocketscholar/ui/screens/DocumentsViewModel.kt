@@ -25,6 +25,8 @@ data class DocumentsUiState(
     val isLoading: Boolean = false,
     val error: String? = null,
     val processingDocumentId: String? = null,
+    /** (currentChunk, totalChunks) while embedding; null when idle. */
+    val processingChunkProgress: Pair<Int, Int>? = null,
     val lastChunkCount: Int? = null,
     val chunksCleared: Boolean = false,
     /** Shown when embedding model failed to load; all chunk embeddings will be zeros. */
@@ -85,33 +87,53 @@ class DocumentsViewModel(application: Application) : AndroidViewModel(applicatio
         val doc = repo.getDocuments().find { it.id == docId } ?: return
         viewModelScope.launch {
             _uiState.update {
-                it.copy(processingDocumentId = docId, error = null, lastChunkCount = null)
+                it.copy(
+                    processingDocumentId = docId,
+                    processingChunkProgress = null,
+                    error = null,
+                    lastChunkCount = null
+                )
             }
             try {
                 val count = withContext(Dispatchers.IO) {
                     val chunks = PdfChunkExtractor.extract(doc.path, doc.id)
-                    val entities = chunks.map { chunk ->
+                    val total = chunks.size
+                    val entities = mutableListOf<ChunkEntity>()
+                    val progressInterval = when {
+                        total <= 10 -> 1
+                        total <= 100 -> 5
+                        else -> (total / 50).coerceAtLeast(10)
+                    }
+                    chunks.forEachIndexed { index, chunk ->
                         val embedding = embeddingEngine.embed(chunk.text)
-                        ChunkEntity(
-                            id = chunk.id,
-                            documentId = chunk.documentId,
-                            pageNumber = chunk.pageNumber,
-                            chunkIndex = chunk.chunkIndex,
-                            text = chunk.text,
-                            embedding = EmbeddingBlob.floatArrayToBytes(embedding)
+                        entities.add(
+                            ChunkEntity(
+                                id = chunk.id,
+                                documentId = chunk.documentId,
+                                pageNumber = chunk.pageNumber,
+                                chunkIndex = chunk.chunkIndex,
+                                text = chunk.text,
+                                embedding = EmbeddingBlob.floatArrayToBytes(embedding)
+                            )
                         )
+                        if ((index + 1) % progressInterval == 0 || index == total - 1) {
+                            _uiState.update {
+                                it.copy(processingChunkProgress = (index + 1) to total)
+                            }
+                        }
                     }
                     chunkDao.deleteByDocumentId(docId)
                     chunkDao.insertAll(entities)
                     entities.size
                 }
                 _uiState.update {
-                    it.copy(processingDocumentId = null, lastChunkCount = count)
+                    it.copy(processingDocumentId = null, processingChunkProgress = null, lastChunkCount = count)
                 }
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(
                         processingDocumentId = null,
+                        processingChunkProgress = null,
                         error = "PDF işlenemedi: ${e.message}"
                     )
                 }

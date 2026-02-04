@@ -194,9 +194,11 @@ fun DocumentsScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(uiState.documents, key = { it.id }) { doc ->
+                        val isThisProcessing = uiState.processingDocumentId == doc.id
                         DocumentItem(
                             doc = doc,
-                            isProcessing = uiState.processingDocumentId == doc.id,
+                            isProcessing = isThisProcessing,
+                            chunkProgress = if (isThisProcessing) uiState.processingChunkProgress else null,
                             onProcess = { viewModel.processDocument(doc.id) },
                             onDelete = { viewModel.removeDocument(doc.id) }
                         )
@@ -211,6 +213,7 @@ fun DocumentsScreen(
 private fun DocumentItem(
     doc: Document,
     isProcessing: Boolean,
+    chunkProgress: Pair<Int, Int>?,
     onProcess: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
@@ -222,45 +225,58 @@ private fun DocumentItem(
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        androidx.compose.foundation.layout.Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(16.dp)
         ) {
-            Icon(
-                imageVector = Icons.Default.Description,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Text(
-                text = doc.name,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f).padding(horizontal = 12.dp)
-            )
-            if (isProcessing) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(24.dp),
-                    strokeWidth = 2.dp
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Description,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
                 )
-            } else {
-                Button(
-                    onClick = onProcess,
-                    modifier = Modifier.padding(end = 4.dp)
-                ) {
-                    Icon(
-                        Icons.Default.PlayArrow,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+                Text(
+                    text = doc.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f).padding(horizontal = 12.dp)
+                )
+                if (isProcessing) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.dp
                     )
-                    Text("İşle", modifier = Modifier.padding(start = 4.dp))
+                } else {
+                    Button(
+                        onClick = onProcess,
+                        modifier = Modifier.padding(end = 4.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text("İşle", modifier = Modifier.padding(start = 4.dp))
+                    }
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Default.Delete, contentDescription = "Remove")
                 }
             }
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Default.Delete, contentDescription = "Remove")
+            if (isProcessing && chunkProgress != null) {
+                val (current, total) = chunkProgress
+                Text(
+                    text = "Embedding: $current / $total chunk",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 6.dp)
+                )
             }
         }
     }
