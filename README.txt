@@ -1,0 +1,1 @@
+For embedding model you should download embeddinggemma-300M_seq512_mixed-precision.tflite from https://huggingface.co/litert-community/embeddinggemma-300m/tree/main and put it inside of assets folder 
