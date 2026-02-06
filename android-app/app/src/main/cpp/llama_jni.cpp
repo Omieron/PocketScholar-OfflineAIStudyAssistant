@@ -108,9 +108,16 @@ Java_com_example_pocketscholar_engine_LlamaEngine_prompt(JNIEnv* env, jobject, j
     llama_sampler* smpl = llama_sampler_chain_init(sparams);
     llama_sampler_chain_add(smpl, llama_sampler_init_greedy());
 
-    const int n_predict = 32;  // 256 for production; 32 for emulator testing
+    const int n_predict = 256;
     std::string result;
-    llama_batch batch = llama_batch_get_one(tokens.data(), (int32_t)tokens.size());
+    // Limit prompt tokens to avoid batch overflow (n_batch=512). RAG context is already capped in RagService.
+    const int max_prompt_tokens = 480;
+    int n_use = (int)tokens.size();
+    if (n_use > max_prompt_tokens) {
+        LOGE("Prompt too long (%d tokens), truncating to %d", n_use, max_prompt_tokens);
+        n_use = max_prompt_tokens;
+    }
+    llama_batch batch = llama_batch_get_one(tokens.data(), n_use);
 
     for (int i = 0; i < n_predict; i++) {
         if (llama_decode(g_ctx, batch) != 0) break;

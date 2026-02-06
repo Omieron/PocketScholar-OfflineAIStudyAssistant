@@ -12,13 +12,15 @@ import java.io.FileOutputStream
 import java.nio.channels.FileChannel
 
 private const val MODEL_ASSET = "embedding_model.tflite"
-const val EMBEDDING_DIM = 384 // INT32 model default; auto-detected when model loads
+const val EMBEDDING_DIM = 768 // EmbeddingGemma default; auto-detected when model loads
 private const val TAG = "EmbeddingEngine"
 
 /**
  * Embeds text into a fixed-size vector for vector search.
  * Uses Google Play Services TFLite (InterpreterApi).
- * If the model expects INT32 input (token IDs), uses BertWordPieceTokenizer with vocab.txt.
+ * Supports both INT32 input (token IDs) and STRING input models.
+ * - INT32 models: Uses BertWordPieceTokenizer with vocab.txt
+ * - STRING models: Direct string input (e.g., EmbeddingGemma with SentencePiece)
  */
 class EmbeddingEngine(private val context: Context) {
 
@@ -30,6 +32,8 @@ class EmbeddingEngine(private val context: Context) {
     private var useInt32Input: Boolean = false
     private var maxSeqLen: Int = 128
     private var tokenizer: BertWordPieceTokenizer? = null
+    private var sentencePieceTokenizer: SentencePieceTokenizer? = null
+    private var useSentencePiece: Boolean = false
 
     init {
         if (modelFile == null) {
@@ -67,11 +71,36 @@ class EmbeddingEngine(private val context: Context) {
                 val shape = input0.shape()
                 if (shape.isNotEmpty()) maxSeqLen = shape.last().toInt().coerceAtLeast(1)
                 if (useInt32Input) {
-                    tokenizer = BertWordPieceTokenizer(context)
-                    if (!tokenizer!!.isLoaded())
-                        Log.w(TAG, "INT32 model but vocab.txt missing; embeddings will fail until vocab is added.")
-                    else
-                        Log.i(TAG, "TFLite INT32 model; using WordPiece tokenizer, maxSeqLen=$maxSeqLen")
+                    // INT32 model detected - check if it's EmbeddingGemma (needs SentencePiece) or BERT (needs WordPiece)
+                    val hasSentencePiece = try {
+                        context.assets.open("sentencepiece.model").use { true }
+                    } catch (e: Exception) {
+                        false
+                    }
+                    
+                    if (hasSentencePiece) {
+                        sentencePieceTokenizer = SentencePieceTokenizer(context)
+                        if (sentencePieceTokenizer!!.isLoaded()) {
+                            useSentencePiece = true
+                            Log.i(TAG, "TFLite INT32 model with SentencePiece detected (EmbeddingGemma); using SentencePiece tokenizer, maxSeqLen=$maxSeqLen")
+                        } else {
+                            Log.w(TAG, "SentencePiece model file present but failed to load (wrong/truncated format?). Falling back to WordPiece if vocab.txt exists.")
+                            sentencePieceTokenizer = null
+                            tokenizer = BertWordPieceTokenizer(context)
+                            if (!tokenizer!!.isLoaded())
+                                Log.w(TAG, "INT32 model but vocab.txt missing; embeddings will fail until vocab is added.")
+                            else
+                                Log.i(TAG, "TFLite INT32 model; using WordPiece tokenizer (fallback), maxSeqLen=$maxSeqLen")
+                        }
+                    } else {
+                        tokenizer = BertWordPieceTokenizer(context)
+                        if (!tokenizer!!.isLoaded())
+                            Log.w(TAG, "INT32 model but vocab.txt missing; embeddings will fail until vocab is added.")
+                        else
+                            Log.i(TAG, "TFLite INT32 model; using WordPiece tokenizer, maxSeqLen=$maxSeqLen")
+                    }
+                } else {
+                    Log.i(TAG, "TFLite STRING input model detected; direct string embedding (e.g., EmbeddingGemma), maxSeqLen=$maxSeqLen")
                 }
             }
             
@@ -121,20 +150,37 @@ class EmbeddingEngine(private val context: Context) {
         val outDim = if (shape.size >= 2) shape[shape.size - 1].toInt() else shape[0].toInt()
         val output = Array(1) { FloatArray(outDim) }
 
-        val inputs: Array<Any> = if (useInt32Input && tokenizer != null && tokenizer!!.isLoaded()) {
-            val (inputIds, actualLen) = tokenizer!!.tokenizeToIds(text, maxSeqLen)
-            val inputIds2D = Array(1) { inputIds }
-            if (numInputs >= 3) {
-                val mask2D = Array(1) { tokenizer!!.attentionMask(actualLen, maxSeqLen) }
-                val segment2D = Array(1) { tokenizer!!.segmentIds(maxSeqLen) }
-                arrayOf(inputIds2D, mask2D, segment2D)
-            } else {
-                arrayOf(inputIds2D)
+        val inputs: Array<Any> = when {
+            useInt32Input && useSentencePiece && sentencePieceTokenizer != null && sentencePieceTokenizer!!.isLoaded() -> {
+                // Use SentencePiece tokenizer (for EmbeddingGemma)
+                val (inputIds, actualLen) = sentencePieceTokenizer!!.tokenizeToIds(text, maxSeqLen)
+                val inputIds2D = Array(1) { inputIds }
+                if (numInputs >= 3) {
+                    val mask2D = Array(1) { sentencePieceTokenizer!!.attentionMask(actualLen, maxSeqLen) }
+                    val segment2D = Array(1) { sentencePieceTokenizer!!.segmentIds(maxSeqLen) }
+                    arrayOf(inputIds2D, mask2D, segment2D)
+                } else {
+                    arrayOf(inputIds2D)
+                }
             }
-        } else {
-            when {
-                numInputs >= 3 -> arrayOf(arrayOf(text), arrayOf(""), arrayOf(""))
-                else -> arrayOf(arrayOf(text))
+            useInt32Input && tokenizer != null && tokenizer!!.isLoaded() -> {
+                // Use WordPiece tokenizer (for BERT-style models)
+                val (inputIds, actualLen) = tokenizer!!.tokenizeToIds(text, maxSeqLen)
+                val inputIds2D = Array(1) { inputIds }
+                if (numInputs >= 3) {
+                    val mask2D = Array(1) { tokenizer!!.attentionMask(actualLen, maxSeqLen) }
+                    val segment2D = Array(1) { tokenizer!!.segmentIds(maxSeqLen) }
+                    arrayOf(inputIds2D, mask2D, segment2D)
+                } else {
+                    arrayOf(inputIds2D)
+                }
+            }
+            else -> {
+                // STRING input model
+                when {
+                    numInputs >= 3 -> arrayOf(arrayOf(text), arrayOf(""), arrayOf(""))
+                    else -> arrayOf(arrayOf(text))
+                }
             }
         }
 

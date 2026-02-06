@@ -80,6 +80,8 @@ dependencies {
     // Google Play Services TFLite (Most stable, no namespace collisions)
     implementation("com.google.android.gms:play-services-tflite-java:16.1.0")
     implementation("com.google.android.gms:play-services-tflite-support:16.0.1")
+    // SentencePiece tokenizer for EmbeddingGemma models (pure Java, no JNI)
+    implementation("io.github.eix128:sentencepiece4j:1.0.1")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

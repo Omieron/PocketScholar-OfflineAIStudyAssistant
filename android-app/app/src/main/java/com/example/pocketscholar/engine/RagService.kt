@@ -19,7 +19,8 @@ Soru: %s
 Cevap:""".trimIndent()
 
     private const val CHUNK_SEPARATOR = "\n---\n"
-    private const val MAX_CONTEXT_CHARS = 3500
+    // Keep under ~400 tokens to avoid llama_decode batch overflow (n_batch=512). ~1.5 chars/token for Turkish.
+    private const val MAX_CONTEXT_CHARS = 2000
     private const val DEFAULT_TOP_K = 5
 
     /**
