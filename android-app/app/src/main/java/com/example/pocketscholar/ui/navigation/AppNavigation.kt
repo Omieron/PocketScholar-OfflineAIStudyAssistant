@@ -10,7 +10,7 @@ enum class AppScreen(
     val title: String,
     val icon: ImageVector
 ) {
-    Documents("Documents", Icons.Default.Description),
-    Chat("Chat", Icons.Default.Chat),
-    Stats("Stats", Icons.Default.BarChart)
+    Documents("Belgeler", Icons.Default.Description),
+    Chat("Sohbet", Icons.Default.Chat),
+    Stats("İstatistik", Icons.Default.BarChart)
 }
