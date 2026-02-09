@@ -18,6 +18,9 @@ interface ChunkDao {
     @Query("SELECT * FROM chunks ORDER BY documentId, pageNumber, chunkIndex")
     suspend fun getAll(): @JvmSuppressWildcards List<ChunkEntity>
 
+    @Query("SELECT * FROM chunks WHERE documentId IN (:documentIds) ORDER BY documentId, pageNumber, chunkIndex")
+    suspend fun getByDocumentIds(documentIds: List<String>): @JvmSuppressWildcards List<ChunkEntity>
+
     @Query("DELETE FROM chunks WHERE documentId = :documentId")
     suspend fun deleteByDocumentId(documentId: String): @JvmSuppressWildcards Int
 

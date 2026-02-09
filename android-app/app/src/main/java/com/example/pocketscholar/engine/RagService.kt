@@ -1,7 +1,12 @@
 package com.example.pocketscholar.engine
 
+import android.util.Log
 import com.example.pocketscholar.data.VectorStoreRepository
 import com.example.pocketscholar.data.db.ChunkEntity
+import com.example.pocketscholar.data.db.ScoredChunk
+import com.example.pocketscholar.data.db.VectorUtils
+
+private const val TAG = "RagService"
 
 /**
  * RAG pipeline: query → embedding → top-k chunks → prompt with context → LLM answer.
@@ -9,32 +14,24 @@ import com.example.pocketscholar.data.db.ChunkEntity
  */
 object RagService {
 
+    // Direct prompt template - asks for concise answer
     private val RAG_PROMPT_TEMPLATE = """
-The following text passages are the most relevant parts found for the question. Answer based ONLY on these passages.
-
-IMPORTANT RULES:
-1. If the question contains words like "all", "list", "tell me about", "describe", then describe ALL relevant information from the text completely. List everything, not just one item.
-2. DO NOT REPEAT the same information. If information appears in multiple passages, mention it only once.
-3. End your answer with complete sentences. Do not write incomplete sentences.
-
+Context:
 %s
 
-Question: %s
+Q: %s
+Answer briefly and directly:""".trimIndent()
 
-Answer:""".trimIndent()
-
-    private const val CHUNK_SEPARATOR = "\n---\n"
-    // Context limit: max_prompt_tokens=500 in llama_jni, minus ~150 tokens for template+query ≈ 350 tokens context.
-    // 350 tokens × 1.5 chars/token (Turkish) ≈ 525 characters. Increased from 600 to fit more chunks for "list all" queries.
-    private const val MAX_CONTEXT_CHARS = 800
-    // More chunks = better chance to include the right passage; context still capped by MAX_CONTEXT_CHARS.
-    // With 400-char chunks + 80 overlap, ~1-2 chunks fit in 600 chars, so top_k=7 gives us choice.
-    private const val DEFAULT_TOP_K = 7
+    private const val CHUNK_SEPARATOR = "\n\n"
+    // Increased context limit to fit more chunks (was 1200, now 2500)
+    private const val MAX_CONTEXT_CHARS = 2500
+    // More chunks = better chance to include the right passage
+    private const val DEFAULT_TOP_K = 10
 
     /**
      * Kaynak bilgisi: UI'da "Kaynak: sayfa 2, 4" gibi gösterilmek üzere.
      */
-    data class RagSource(val documentId: String, val pageNumber: Int)
+    data class RagSource(val documentId: String, val pageNumber: Int, val similarity: Float = 0f)
 
     /**
      * RAG cevabı: model çıktısı + kaynak chunk'ların (doc, sayfa) listesi.
@@ -47,24 +44,171 @@ Answer:""".trimIndent()
      *
      * @param query Kullanıcının sorduğu metin
      * @param vectorStore Vector store repository (embedding + chunk arama)
-     * @param topK Alınacak chunk sayısı (varsayılan 5)
-     * @return Cevap metni + kaynak (documentId, pageNumber) listesi
+     * @param topK Alınacak chunk sayısı (varsayılan 10)
+     * @param documentIds Belirli dokümanlarda arama yapmak için (opsiyonel, null = tüm dokümanlar)
+     * @param minSimilarity Minimum benzerlik eşiği (varsayılan 0.15)
+     * @return Cevap metni + kaynak (documentId, pageNumber, similarity) listesi
      */
     suspend fun ask(
         query: String,
         vectorStore: VectorStoreRepository,
-        topK: Int = DEFAULT_TOP_K
+        topK: Int = DEFAULT_TOP_K,
+        documentIds: List<String>? = null,
+        minSimilarity: Float = VectorUtils.DEFAULT_MIN_SIMILARITY
     ): RagResult {
-        val chunks = vectorStore.searchSimilar(query, topK)
+        val scoredChunks = vectorStore.searchSimilarWithScores(query, topK, documentIds, minSimilarity)
+        
+        // Log the search results for debugging
+        Log.d(TAG, "Query: \"${query.take(50)}...\" -> Found ${scoredChunks.size} relevant chunks")
+        scoredChunks.forEachIndexed { i, sc ->
+            Log.d(TAG, "  [$i] sim=${String.format("%.3f", sc.similarity)} doc=${sc.chunk.documentId.take(16)}... page=${sc.chunk.pageNumber}")
+            Log.d(TAG, "      text: ${sc.chunk.text.take(100)}...")
+        }
+        
+        if (scoredChunks.isEmpty()) {
+            Log.w(TAG, "No relevant chunks found for query. Try lowering minSimilarity threshold.")
+            return RagResult("Yüklenmiş belgelerde bu konuyla ilgili bilgi bulunamadı. Lütfen soruyu daha spesifik sormayı deneyin.", emptyList())
+        }
+        
+        val chunks = scoredChunks.map { it.chunk }
         val context = buildContextWithLimit(chunks, MAX_CONTEXT_CHARS)
         val prompt = RAG_PROMPT_TEMPLATE.format(context, query)
+        
+        // Log the full context to debug what LLM sees
+        Log.d(TAG, "=== CONTEXT SENT TO LLM ===")
+        Log.d(TAG, context)
+        Log.d(TAG, "=== END CONTEXT (${context.length} chars) ===")
+        Log.d(TAG, "Prompt total length: ${prompt.length} chars")
 
-        val answer = LlamaEngine.prompt(prompt) ?: "[Cevap oluşturulamadı.]"
-        val sources = chunks
-            .map { RagSource(it.documentId, it.pageNumber) }
+        var answer = LlamaEngine.prompt(prompt) ?: "[Cevap oluşturulamadı.]"
+        
+        Log.d(TAG, "Raw LLM answer: ${answer.take(200)}...")
+        
+        // Sanitize: remove prompt fragments and detect repetition loops
+        answer = sanitizeResponse(answer)
+        
+        val sources = scoredChunks
+            .map { RagSource(it.chunk.documentId, it.chunk.pageNumber, it.similarity) }
             .distinctBy { it.documentId to it.pageNumber }
 
         return RagResult(answer.trim(), sources)
+    }
+    
+    /**
+     * Remove prompt fragments and detect/fix repetition loops.
+     * Small LLMs sometimes echo prompts or get stuck repeating phrases.
+     */
+    private fun sanitizeResponse(response: String): String {
+        var cleaned = response.trim()
+        
+        // 1. Remove common prompt fragments
+        val fragmentsToRemove = listOf(
+            "Context from documents:",
+            "Based on the context above",
+            "IMPORTANT RULES:",
+            "The following text passages",
+            "Answer based ONLY on these passages",
+            "Question:",
+            "Context:"
+        )
+        
+        for (fragment in fragmentsToRemove) {
+            val idx = cleaned.indexOf(fragment, ignoreCase = true)
+            if (idx != -1) {
+                val afterFragment = cleaned.substring(idx + fragment.length).trim()
+                if (afterFragment.length > 20) {
+                    cleaned = afterFragment
+                }
+            }
+        }
+        
+        // 2. Remove "Answer:" prefix if present
+        if (cleaned.startsWith("Answer:", ignoreCase = true)) {
+            cleaned = cleaned.substring(7).trim()
+        }
+        
+        // 3. Detect and truncate repetition loops
+        cleaned = truncateRepetition(cleaned)
+        
+        // 4. Limit response length (prevent very long outputs)
+        if (cleaned.length > 500) {
+            val lastSentenceEnd = cleaned.take(500).lastIndexOfAny(charArrayOf('.', '!', '?'))
+            if (lastSentenceEnd > 200) {
+                cleaned = cleaned.take(lastSentenceEnd + 1)
+            } else {
+                cleaned = cleaned.take(500) + "..."
+            }
+        }
+        
+        return cleaned
+    }
+    
+    /**
+     * Detects repeating phrases ANYWHERE in the text and truncates before repetition starts.
+     * Much more aggressive pattern detection for broken LLM outputs.
+     */
+    private fun truncateRepetition(text: String): String {
+        if (text.length < 30) return text
+        
+        // Split into lines for line-based repetition detection
+        val lines = text.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+        
+        // 1. Check for any line that repeats 3+ times
+        val lineCounts = lines.groupingBy { it }.eachCount()
+        val repeatedLine = lineCounts.entries.find { it.value >= 3 && it.key.length >= 3 }
+        if (repeatedLine != null) {
+            Log.w(TAG, "Detected repeated line (${repeatedLine.value}x): '${repeatedLine.key.take(30)}...'")
+            // Return only unique lines up to first repeat
+            val result = StringBuilder()
+            val seen = mutableSetOf<String>()
+            for (line in lines) {
+                if (line in seen && line == repeatedLine.key) break
+                if (line !in seen) {
+                    seen.add(line)
+                    result.append(line).append(" ")
+                }
+            }
+            return result.toString().trim().ifEmpty { lines.first() }
+        }
+        
+        // 2. Check for short patterns (like `"The` repeating)
+        for (patternLen in 3..20) {
+            var i = 0
+            while (i < text.length - patternLen * 3) {
+                val pattern = text.substring(i, i + patternLen)
+                if (pattern.isBlank()) { i++; continue }
+                
+                var count = 1
+                var j = i + patternLen
+                while (j + patternLen <= text.length && text.substring(j, j + patternLen) == pattern) {
+                    count++
+                    j += patternLen
+                }
+                
+                if (count >= 3) {
+                    Log.w(TAG, "Detected short pattern (${count}x): '${pattern.take(20)}'")
+                    return text.substring(0, i).trim().ifEmpty { pattern.trim() }
+                }
+                i++
+            }
+        }
+        
+        // 3. Check for word-based repetition (same word 5+ times in a row)
+        val words = text.split(Regex("\\s+"))
+        for (i in 0 until words.size - 4) {
+            val word = words[i]
+            if (word.length < 2) continue
+            var count = 1
+            for (j in i + 1 until words.size) {
+                if (words[j] == word) count++ else break
+            }
+            if (count >= 5) {
+                Log.w(TAG, "Detected word repetition (${count}x): '$word'")
+                return words.take(i).joinToString(" ").ifEmpty { word }
+            }
+        }
+        
+        return text
     }
 
     /**
