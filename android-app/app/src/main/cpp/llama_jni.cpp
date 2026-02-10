@@ -70,7 +70,7 @@ Java_com_example_pocketscholar_engine_LlamaEngine_loadModel(JNIEnv* env, jobject
 
     llama_context_params cparams = llama_context_default_params();
     cparams.n_ctx = 2048;
-    cparams.n_batch = 512;
+    cparams.n_batch = 1536;
     g_ctx = llama_init_from_model(g_model, cparams);
     if (!g_ctx) {
         llama_model_free(g_model);
@@ -108,11 +108,12 @@ Java_com_example_pocketscholar_engine_LlamaEngine_prompt(JNIEnv* env, jobject, j
     llama_sampler* smpl = llama_sampler_chain_init(sparams);
     llama_sampler_chain_add(smpl, llama_sampler_init_greedy());
 
-    const int n_predict = 256;  // Increased for complete answers; "list all" queries need more tokens
+    const int n_predict = 256;  // Max tokens to generate
     std::string result;
-    // Limit prompt tokens to avoid batch overflow (n_batch=512). RagService caps context at 800 chars (~530 tokens).
-    // Template + query ≈ 150 tokens (longer template for "list all" instructions), so max_prompt_tokens=500 is safe.
-    const int max_prompt_tokens = 500;
+    // n_ctx=2048, so prompt + generated tokens must fit within 2048.
+    // Reserve n_predict (256) tokens for generation, leaving 1792 for prompt.
+    // Use 1500 as a safe limit (RagService caps context at ~1500 chars).
+    const int max_prompt_tokens = 1500;
     int n_use = (int)tokens.size();
     if (n_use > max_prompt_tokens) {
         LOGE("Prompt too long (%d tokens), truncating to %d", n_use, max_prompt_tokens);

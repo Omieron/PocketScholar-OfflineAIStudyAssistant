@@ -14,19 +14,25 @@ private const val TAG = "RagService"
  */
 object RagService {
 
-    // Direct prompt template - asks for concise answer
+    // Instruct-style prompt - small models follow this better
     private val RAG_PROMPT_TEMPLATE = """
-Context:
+### Instruction:
+Answer the question using ONLY the information below. Be brief and precise.
+
+### Context:
 %s
 
-Q: %s
-Answer briefly and directly:""".trimIndent()
+### Question:
+%s
+
+### Response:""".trimIndent()
 
     private const val CHUNK_SEPARATOR = "\n\n"
-    // Increased context limit to fit more chunks (was 1200, now 2500)
-    private const val MAX_CONTEXT_CHARS = 2500
-    // More chunks = better chance to include the right passage
-    private const val DEFAULT_TOP_K = 10
+    // Context limit: ~1500 chars ≈ ~400 tokens, plus prompt template + query ≈ ~100 tokens = ~500 tokens total
+    // This fits well within max_prompt_tokens = 1500 in llama_jni.cpp
+    private const val MAX_CONTEXT_CHARS = 1500
+    // Fewer chunks = more focused context
+    private const val DEFAULT_TOP_K = 5
 
     /**
      * Kaynak bilgisi: UI'da "Kaynak: sayfa 2, 4" gibi gösterilmek üzere.
@@ -93,50 +99,72 @@ Answer briefly and directly:""".trimIndent()
 
         return RagResult(answer.trim(), sources)
     }
-    
     /**
      * Remove prompt fragments and detect/fix repetition loops.
      * Small LLMs sometimes echo prompts or get stuck repeating phrases.
+     * Handles both leading echoes (prompt at start) and trailing echoes (prompt repeated after answer).
      */
     private fun sanitizeResponse(response: String): String {
         var cleaned = response.trim()
         
-        // 1. Remove common prompt fragments
-        val fragmentsToRemove = listOf(
+        // 1. Remove prompt fragments only if they appear at the START (first 100 chars)
+        val leadingFragments = listOf(
+            "### Response:",
+            "### Instruction:",
+            "Answer the question using ONLY",
             "Context from documents:",
             "Based on the context above",
-            "IMPORTANT RULES:",
-            "The following text passages",
             "Answer based ONLY on these passages",
             "Question:",
-            "Context:"
+            "Context:",
+            "Answer briefly and directly:"
         )
         
-        for (fragment in fragmentsToRemove) {
-            val idx = cleaned.indexOf(fragment, ignoreCase = true)
+        for (fragment in leadingFragments) {
+            val searchArea = cleaned.take(100)
+            val idx = searchArea.indexOf(fragment, ignoreCase = true)
             if (idx != -1) {
                 val afterFragment = cleaned.substring(idx + fragment.length).trim()
-                if (afterFragment.length > 20) {
+                if (afterFragment.isNotEmpty()) {
                     cleaned = afterFragment
                 }
             }
         }
         
-        // 2. Remove "Answer:" prefix if present
+        // 2. Remove "Answer:" or "A:" prefix if present at start
         if (cleaned.startsWith("Answer:", ignoreCase = true)) {
             cleaned = cleaned.substring(7).trim()
         }
+        if (cleaned.startsWith("A:", ignoreCase = true)) {
+            cleaned = cleaned.substring(2).trim()
+        }
         
-        // 3. Detect and truncate repetition loops
+        // 3. Truncate at TRAILING prompt echoes (LLM repeats the prompt after answer)
+        val trailingMarkers = listOf(
+            "### Instruction:", "### Context:", "### Question:", "### Response:",
+            "Q:", "Question:", "Context:", "Answer briefly",
+            "Answer based ONLY", "Based on the context",
+            "Answer the question using"
+        )
+        for (marker in trailingMarkers) {
+            // Only look after the first 30 chars (the answer should have started by then)
+            val searchStart = 30.coerceAtMost(cleaned.length)
+            val idx = cleaned.indexOf(marker, startIndex = searchStart, ignoreCase = true)
+            if (idx != -1) {
+                cleaned = cleaned.substring(0, idx).trim()
+            }
+        }
+        
+        // 4. Detect and truncate repetition loops
         cleaned = truncateRepetition(cleaned)
         
-        // 4. Limit response length (prevent very long outputs)
-        if (cleaned.length > 500) {
-            val lastSentenceEnd = cleaned.take(500).lastIndexOfAny(charArrayOf('.', '!', '?'))
+        // 5. Limit response length (prevent very long outputs)
+        if (cleaned.length > 800) {
+            val lastSentenceEnd = cleaned.take(800).lastIndexOfAny(charArrayOf('.', '!', '?'))
             if (lastSentenceEnd > 200) {
                 cleaned = cleaned.take(lastSentenceEnd + 1)
             } else {
-                cleaned = cleaned.take(500) + "..."
+                cleaned = cleaned.take(800) + "..."
             }
         }
         

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -20,6 +21,8 @@ import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -33,8 +36,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.pocketscholar.data.Document
 
 @Composable
 fun ChatScreen(
@@ -43,6 +48,11 @@ fun ChatScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
+
+    // Refresh documents when screen appears
+    LaunchedEffect(Unit) {
+        viewModel.loadAvailableDocuments()
+    }
 
     LaunchedEffect(uiState.messages.size) {
         if (uiState.messages.isNotEmpty()) {
@@ -129,6 +139,16 @@ fun ChatScreen(
             }
         }
 
+        // Document selector chips
+        if (uiState.availableDocuments.isNotEmpty()) {
+            DocumentSelector(
+                documents = uiState.availableDocuments,
+                selectedIds = uiState.selectedDocumentIds,
+                onToggle = viewModel::toggleDocumentSelection,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+            )
+        }
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -168,6 +188,59 @@ fun ChatScreen(
                 Icon(
                     imageVector = Icons.Default.Send,
                     contentDescription = "Gönder"
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Horizontal scrollable document selector chips.
+ * Users can select which PDFs to search.
+ */
+@Composable
+private fun DocumentSelector(
+    documents: List<Document>,
+    selectedIds: Set<String>,
+    onToggle: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier) {
+        val labelText = if (selectedIds.isEmpty()) {
+            "📄 Tüm belgelerde ara"
+        } else {
+            val names = documents
+                .filter { it.id in selectedIds }
+                .joinToString(", ") { it.name.removeSuffix(".pdf") }
+            "📄 Seçili: $names"
+        }
+        Text(
+            text = labelText,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(bottom = 4.dp)
+        )
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(documents, key = { it.id }) { doc ->
+                val isSelected = doc.id in selectedIds
+                FilterChip(
+                    selected = isSelected,
+                    onClick = { onToggle(doc.id) },
+                    label = { 
+                        Text(
+                            text = doc.name.removeSuffix(".pdf"),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
                 )
             }
         }

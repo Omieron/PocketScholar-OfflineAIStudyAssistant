@@ -70,14 +70,25 @@ class VectorStoreRepository(
         documentIds: List<String>? = null,
         minSimilarity: Float = 0.1f // Lower threshold for hybrid
     ): List<ScoredChunk> {
+        // Debug: Show what document IDs were requested
+        Log.d(TAG, "=== SEARCH REQUEST ===")
+        Log.d(TAG, "  documentIds filter: ${documentIds ?: "ALL (no filter)"}")
+        
+        // Debug: Show all unique documentIds in the database
+        val allChunks = chunkDao.getAll()
+        val uniqueDocIds = allChunks.map { it.documentId }.toSet()
+        Log.d(TAG, "  All documentIds in DB: $uniqueDocIds")
+        
         val chunks = if (documentIds.isNullOrEmpty()) {
-            chunkDao.getAll()
+            allChunks
         } else {
             chunkDao.getByDocumentIds(documentIds)
         }
         
+        Log.d(TAG, "  Filtered chunks count: ${chunks.size} (from total ${allChunks.size})")
+        
         if (chunks.isEmpty()) {
-            Log.d(TAG, "No chunks available in database")
+            Log.d(TAG, "No chunks available for selected documents!")
             return emptyList()
         }
         

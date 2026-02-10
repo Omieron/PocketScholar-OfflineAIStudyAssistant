@@ -3,6 +3,8 @@ package com.example.pocketscholar.ui.screens
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.pocketscholar.data.Document
+import com.example.pocketscholar.data.DocumentRepository
 import com.example.pocketscholar.data.db.AppDatabase
 import com.example.pocketscholar.data.VectorStoreRepository
 import com.example.pocketscholar.engine.EmbeddingEngine
@@ -24,17 +26,43 @@ data class ChatMessage(
 data class ChatUiState(
     val messages: List<ChatMessage> = emptyList(),
     val inputText: String = "",
-    val isThinking: Boolean = false
+    val isThinking: Boolean = false,
+    // Document selection
+    val availableDocuments: List<Document> = emptyList(),
+    val selectedDocumentIds: Set<String> = emptySet()
 )
 
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
+    private val documentRepo = DocumentRepository(application)
     private val vectorStore = VectorStoreRepository(
         chunkDao = AppDatabase.getInstance(application).chunkDao(),
         embeddingEngine = EmbeddingEngine(application)
     )
+
+    init {
+        loadAvailableDocuments()
+    }
+
+    /** Load documents from repository */
+    fun loadAvailableDocuments() {
+        val docs = documentRepo.getDocuments()
+        _uiState.update { it.copy(availableDocuments = docs) }
+    }
+
+    /** Toggle document selection for filtering */
+    fun toggleDocumentSelection(docId: String) {
+        _uiState.update { state ->
+            val newSelection = if (docId in state.selectedDocumentIds) {
+                state.selectedDocumentIds - docId
+            } else {
+                state.selectedDocumentIds + docId
+            }
+            state.copy(selectedDocumentIds = newSelection)
+        }
+    }
 
     fun updateInput(text: String) {
         _uiState.update { it.copy(inputText = text) }
@@ -49,6 +77,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             role = "user",
             text = text
         )
+        
+        // Get selected document IDs (null means search all)
+        val selectedIds = _uiState.value.selectedDocumentIds.toList().ifEmpty { null }
+        
         _uiState.update {
             it.copy(
                 messages = it.messages + userMsg,
@@ -61,7 +93,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             val replyId = "assistant_${System.currentTimeMillis()}"
             val replyText = withContext(Dispatchers.IO) {
                 try {
-                    val result = RagService.ask(query = text, vectorStore = vectorStore)
+                    val result = RagService.ask(
+                        query = text, 
+                        vectorStore = vectorStore,
+                        documentIds = selectedIds  // Pass selected docs!
+                    )
                     var answer = result.answer
                     // LLM yüklü değilse JNI'den gelen İngilizce mesajı Türkçe açıklamayla değiştir
                     if (answer.contains("Model not loaded", ignoreCase = true) || answer.contains("Call loadModel() first")) {
@@ -86,3 +122,4 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 }
+
