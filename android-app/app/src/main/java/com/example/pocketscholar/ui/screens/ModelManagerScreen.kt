@@ -151,12 +151,13 @@ private fun RandHeader() {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 32.dp)
+            .padding(horizontal = 16.dp)
+            .padding(top = 12.dp, bottom = 8.dp)
     ) {
         // Geometrik aksan — küçük kare
         Box(
             modifier = Modifier
-                .size(28.dp)
+                .size(16.dp)
                 .background(RandAccent, RoundedCornerShape(4.dp))
         )
         Spacer(modifier = Modifier.height(16.dp))
@@ -191,8 +192,8 @@ private fun TierDivider(tier: ModelTier) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp)
-            .padding(top = 28.dp, bottom = 8.dp)
+            .padding(horizontal = 16.dp)
+            .padding(top = 16.dp, bottom = 4.dp)
     ) {
         // İnce çizgi
         Box(
@@ -247,7 +248,7 @@ private fun RandModelCard(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 6.dp)
+            .padding(horizontal = 16.dp, vertical = 4.dp)
     ) {
         Column(
             modifier = Modifier
@@ -257,7 +258,7 @@ private fun RandModelCard(
                     if (isActive) RandAccentLight else Color.Transparent,
                     RoundedCornerShape(2.dp)
                 )
-                .padding(20.dp)
+                .padding(14.dp)
                 .animateContentSize()
         ) {
             // ── Satır 1: İsim + Durum göstergesi + Info butonu ──

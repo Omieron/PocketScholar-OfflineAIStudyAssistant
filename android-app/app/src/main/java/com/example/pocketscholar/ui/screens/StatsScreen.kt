@@ -47,15 +47,15 @@ fun StatsScreen(modifier: Modifier = Modifier) {
             .fillMaxSize()
             .background(RandWhite)
             .verticalScroll(scrollState)
-            .padding(24.dp)
+            .padding(16.dp)
     ) {
         // ── Başlık ──
         Box(
             modifier = Modifier
-                .size(24.dp)
+                .size(16.dp)
                 .background(RandTeal, RoundedCornerShape(3.dp))
         )
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = "İstatistik.",
             style = MaterialTheme.typography.displayMedium,
@@ -68,16 +68,16 @@ fun StatsScreen(modifier: Modifier = Modifier) {
             color = RandGrey
         )
 
-        Spacer(modifier = Modifier.height(40.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         // ── Metrik Kartları ──
         RandStatBox(label = "BELLEK", value = "—", accent = RandTeal)
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(10.dp))
         RandStatBox(label = "PİL", value = "—", accent = RandBlack)
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(10.dp))
         RandStatBox(label = "MODEL", value = "—", accent = RandTeal)
 
-        Spacer(modifier = Modifier.height(40.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         // Yakında etiketi
         Text(

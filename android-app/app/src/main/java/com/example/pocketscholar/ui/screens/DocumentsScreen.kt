@@ -130,16 +130,16 @@ fun DocumentsScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
-                    .padding(top = 32.dp, bottom = 16.dp)
+                    .padding(horizontal = 16.dp)
+                    .padding(top = 12.dp, bottom = 8.dp)
             ) {
                 // Geometrik aksan
                 Box(
                     modifier = Modifier
-                        .size(24.dp)
-                        .background(RandTeal, RoundedCornerShape(3.dp))
+                        .size(16.dp)
+                        .background(RandTeal, RoundedCornerShape(2.dp))
                 )
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = "Belgeler.",
                     style = MaterialTheme.typography.displayMedium,
@@ -149,8 +149,7 @@ fun DocumentsScreen(
                 // Chunk temizle butonu
                 Row(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
+                        .fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
                     TextButton(onClick = { viewModel.clearAllChunks() }) {
@@ -207,7 +206,7 @@ fun DocumentsScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(24.dp),
+                        .padding(16.dp),
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
@@ -231,8 +230,8 @@ fun DocumentsScreen(
                 // ── Belge Listesi ──
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(0.dp)
                 ) {
                     items(uiState.documents, key = { it.id }) { doc ->
                         val isThisProcessing = uiState.processingDocumentId == doc.id
@@ -270,7 +269,7 @@ private fun RandDocumentItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 14.dp),
+                .padding(vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Sol: Küçük teal kare gösterge
@@ -279,7 +278,7 @@ private fun RandDocumentItem(
                     .size(8.dp)
                     .background(RandTeal, RoundedCornerShape(1.dp))
             )
-            Spacer(modifier = Modifier.width(14.dp))
+            Spacer(modifier = Modifier.width(10.dp))
 
             // Dosya adı
             Text(
@@ -336,7 +335,7 @@ private fun RandDocumentItem(
                     letterSpacing = 1.sp
                 ),
                 color = RandGrey,
-                modifier = Modifier.padding(start = 22.dp, bottom = 8.dp)
+                modifier = Modifier.padding(start = 26.dp, bottom = 4.dp)
             )
         }
 

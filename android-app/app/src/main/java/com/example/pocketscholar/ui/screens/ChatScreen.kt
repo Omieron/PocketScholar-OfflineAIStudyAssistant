@@ -83,9 +83,9 @@ fun ChatScreen(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 16.dp),
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             state = listState,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             // ── Boş Durum: Rand tarzı — cesur metin ──
             if (uiState.messages.isEmpty()) {
@@ -93,16 +93,16 @@ fun ChatScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 64.dp),
+                            .padding(vertical = 32.dp),
                         horizontalAlignment = Alignment.Start
                     ) {
                         // Geometrik aksan
                         Box(
                             modifier = Modifier
-                                .size(20.dp)
+                                .size(14.dp)
                                 .background(RandTeal, RoundedCornerShape(2.dp))
                         )
-                        Spacer(modifier = Modifier.height(20.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
                         Text(
                             text = "Belgelerine\nSor.",
                             style = MaterialTheme.typography.displayLarge,
@@ -154,7 +154,7 @@ fun ChatScreen(
                 documents = uiState.availableDocuments,
                 selectedIds = uiState.selectedDocumentIds,
                 onToggle = viewModel::toggleDocumentSelection,
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
             )
         }
 
@@ -162,7 +162,7 @@ fun ChatScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 16.dp),
+                .padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.Bottom
         ) {
             OutlinedTextField(
