@@ -3,6 +3,7 @@ package com.example.pocketscholar.ui.navigation
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.ui.graphics.vector.ImageVector
 
@@ -12,5 +13,6 @@ enum class AppScreen(
 ) {
     Documents("Belgeler", Icons.Default.Description),
     Chat("Sohbet", Icons.Default.Chat),
+    Models("AI Model", Icons.Default.CloudDownload),
     Stats("İstatistik", Icons.Default.BarChart)
 }

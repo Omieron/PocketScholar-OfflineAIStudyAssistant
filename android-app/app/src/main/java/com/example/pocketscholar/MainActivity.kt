@@ -23,27 +23,28 @@ import androidx.navigation.compose.rememberNavController
 import com.example.pocketscholar.ui.navigation.AppScreen
 import com.example.pocketscholar.ui.screens.ChatScreen
 import com.example.pocketscholar.ui.screens.DocumentsScreen
+import com.example.pocketscholar.ui.screens.ModelManagerScreen
 import com.example.pocketscholar.ui.screens.StatsScreen
 import com.example.pocketscholar.ui.theme.PocketScholarTheme
 import com.example.pocketscholar.engine.LlamaEngine
+import com.example.pocketscholar.data.ModelRepository
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
-import android.os.Environment
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         LlamaEngine.init(applicationContext)
-        // Model: önce uygulama dizini, yoksa sdcard/Download (model.gguf veya *.gguf).
+        // Aktif modeli yükle (ModelRepository üzerinden)
+        val modelRepo = ModelRepository(applicationContext)
         lifecycleScope.launch {
             withContext(Dispatchers.IO) {
-                val modelFile = findModelFile()
-                if (modelFile != null) {
-                    LlamaEngine.loadModel(modelFile.absolutePath)
+                val modelPath = modelRepo.findAnyAvailableModelPath()
+                if (modelPath != null) {
+                    LlamaEngine.loadModel(modelPath)
                 }
             }
         }
@@ -96,6 +97,9 @@ class MainActivity : ComponentActivity() {
                         composable(AppScreen.Chat.name) {
                             ChatScreen()
                         }
+                        composable(AppScreen.Models.name) {
+                            ModelManagerScreen()
+                        }
                         composable(AppScreen.Stats.name) {
                             StatsScreen()
                         }
@@ -105,18 +109,4 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** Uygulama dizininde veya sdcard/Download içinde model.gguf (veya ilk .gguf) dosyasını arar. */
-    private fun findModelFile(): File? {
-        val appDir = getExternalFilesDir(null) ?: return null
-        // 1) Uygulama dizini: .../files/model.gguf
-        var f = File(appDir, "model.gguf")
-        if (f.isFile) return f
-        // 2) sdcard/Download: model.gguf
-        val downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-        f = File(downloadDir, "model.gguf")
-        if (f.isFile) return f
-        // 3) Download içinde herhangi bir .gguf
-        downloadDir.listFiles()?.firstOrNull { it.isFile && it.name.endsWith(".gguf", ignoreCase = true) }?.let { return it }
-        return null
-    }
 }
