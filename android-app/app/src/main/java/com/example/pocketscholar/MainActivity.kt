@@ -4,6 +4,11 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -14,6 +19,10 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -33,12 +42,21 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/*
+ * Paul Rand: "Design is the method of putting form and content together."
+ */
+
+private val RandBlack = Color(0xFF1A1A1A)
+private val RandWhite = Color(0xFFF8F7F4)
+private val RandTeal = Color(0xFF2D9D94)
+private val RandGrey = Color(0xFF9E9E9E)
+private val RandLightGrey = Color(0xFFE8E6E1)
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         LlamaEngine.init(applicationContext)
-        // Aktif modeli yükle (ModelRepository üzerinden)
         val modelRepo = ModelRepository(applicationContext)
         lifecycleScope.launch {
             withContext(Dispatchers.IO) {
@@ -54,34 +72,59 @@ class MainActivity : ComponentActivity() {
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentDestination = navBackStackEntry?.destination
                 Scaffold(
+                    containerColor = RandWhite,
                     bottomBar = {
-                        NavigationBar(
-                            containerColor = MaterialTheme.colorScheme.surface,
-                            contentColor = MaterialTheme.colorScheme.onSurface
-                        ) {
-                            AppScreen.entries.forEach { screen ->
-                                val selected = currentDestination?.hierarchy?.any { it.route == screen.name } == true
-                                NavigationBarItem(
-                                    icon = { Icon(screen.icon, contentDescription = screen.title) },
-                                    label = { Text(screen.title, style = MaterialTheme.typography.labelMedium) },
-                                    selected = selected,
-                                    onClick = {
-                                        navController.navigate(screen.name) {
-                                            popUpTo(navController.graph.findStartDestination().id) {
-                                                saveState = true
+                        // Rand navigasyon: ince üst çizgi, düz arka plan, minimal
+                        Column {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(1.dp)
+                                    .background(RandLightGrey)
+                            )
+                            NavigationBar(
+                                containerColor = RandWhite,
+                                tonalElevation = 0.dp
+                            ) {
+                                AppScreen.entries.forEach { screen ->
+                                    val selected = currentDestination?.hierarchy?.any { it.route == screen.name } == true
+                                    NavigationBarItem(
+                                        icon = {
+                                            Icon(
+                                                screen.icon,
+                                                contentDescription = screen.title,
+                                                modifier = Modifier.height(20.dp)
+                                            )
+                                        },
+                                        label = {
+                                            Text(
+                                                screen.title.uppercase(),
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    fontWeight = if (selected) FontWeight.Black else FontWeight.Medium,
+                                                    letterSpacing = 1.sp,
+                                                    fontSize = 9.sp
+                                                )
+                                            )
+                                        },
+                                        selected = selected,
+                                        onClick = {
+                                            navController.navigate(screen.name) {
+                                                popUpTo(navController.graph.findStartDestination().id) {
+                                                    saveState = true
+                                                }
+                                                launchSingleTop = true
+                                                restoreState = true
                                             }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
-                                    },
-                                    colors = NavigationBarItemDefaults.colors(
-                                        selectedIconColor = MaterialTheme.colorScheme.primary,
-                                        selectedTextColor = MaterialTheme.colorScheme.primary,
-                                        indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-                                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
+                                        colors = NavigationBarItemDefaults.colors(
+                                            selectedIconColor = RandBlack,
+                                            selectedTextColor = RandBlack,
+                                            indicatorColor = Color.Transparent,
+                                            unselectedIconColor = RandGrey,
+                                            unselectedTextColor = RandGrey
+                                        )
                                     )
-                                )
+                                }
                             }
                         }
                     }
@@ -91,22 +134,13 @@ class MainActivity : ComponentActivity() {
                         startDestination = AppScreen.Documents.name,
                         modifier = Modifier.padding(innerPadding)
                     ) {
-                        composable(AppScreen.Documents.name) {
-                            DocumentsScreen()
-                        }
-                        composable(AppScreen.Chat.name) {
-                            ChatScreen()
-                        }
-                        composable(AppScreen.Models.name) {
-                            ModelManagerScreen()
-                        }
-                        composable(AppScreen.Stats.name) {
-                            StatsScreen()
-                        }
+                        composable(AppScreen.Documents.name) { DocumentsScreen() }
+                        composable(AppScreen.Chat.name) { ChatScreen() }
+                        composable(AppScreen.Models.name) { ModelManagerScreen() }
+                        composable(AppScreen.Stats.name) { StatsScreen() }
                     }
                 }
             }
         }
     }
-
 }

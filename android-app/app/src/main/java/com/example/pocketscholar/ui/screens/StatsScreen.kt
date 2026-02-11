@@ -1,29 +1,42 @@
 package com.example.pocketscholar.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.Memory
-import androidx.compose.material.icons.filled.BatteryChargingFull
-import androidx.compose.material.icons.filled.Psychology
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+
+/*
+ * Paul Rand İstatistikler —
+ * "The role of the designer is that of a good, thoughtful host."
+ *
+ * Minimal, geometrik kutu kartlar. Sayılar büyük, etiketler küçük.
+ */
+
+private val RandBlack = Color(0xFF1A1A1A)
+private val RandWhite = Color(0xFFF8F7F4)
+private val RandTeal = Color(0xFF2D9D94)
+private val RandGrey = Color(0xFF9E9E9E)
+private val RandLightGrey = Color(0xFFE8E6E1)
 
 @Composable
 fun StatsScreen(modifier: Modifier = Modifier) {
@@ -32,89 +45,90 @@ fun StatsScreen(modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .fillMaxSize()
+            .background(RandWhite)
             .verticalScroll(scrollState)
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(24.dp)
     ) {
-        Column(
+        // ── Başlık ──
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Default.BarChart,
-                contentDescription = null,
-                modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Text(
-                text = "İstatistikler",
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = "Bellek, pil ve model durumu burada görünecek.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-        }
+                .size(24.dp)
+                .background(RandTeal, RoundedCornerShape(3.dp))
+        )
+        Spacer(modifier = Modifier.height(14.dp))
+        Text(
+            text = "İstatistik.",
+            style = MaterialTheme.typography.displayMedium,
+            color = RandBlack
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Sistem durumu ve performans metrikleri.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = RandGrey
+        )
 
-        StatPlaceholderCard(
-            icon = Icons.Default.Memory,
-            title = "Bellek",
-            subtitle = "Yakında"
-        )
-        StatPlaceholderCard(
-            icon = Icons.Default.BatteryChargingFull,
-            title = "Pil",
-            subtitle = "Yakında"
-        )
-        StatPlaceholderCard(
-            icon = Icons.Default.Psychology,
-            title = "Model durumu",
-            subtitle = "Yakında"
+        Spacer(modifier = Modifier.height(40.dp))
+
+        // ── Metrik Kartları ──
+        RandStatBox(label = "BELLEK", value = "—", accent = RandTeal)
+        Spacer(modifier = Modifier.height(16.dp))
+        RandStatBox(label = "PİL", value = "—", accent = RandBlack)
+        Spacer(modifier = Modifier.height(16.dp))
+        RandStatBox(label = "MODEL", value = "—", accent = RandTeal)
+
+        Spacer(modifier = Modifier.height(40.dp))
+
+        // Yakında etiketi
+        Text(
+            text = "YAKINDA",
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 3.sp
+            ),
+            color = RandGrey.copy(alpha = 0.5f)
         )
     }
 }
 
+// ═══════════════════════════════════════════════════════════════
+// Metrik Kutusu — Rand: Geometrik kutu, büyük değer, küçük etiket
+// ═══════════════════════════════════════════════════════════════
 @Composable
-private fun StatPlaceholderCard(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    title: String,
-    subtitle: String,
+private fun RandStatBox(
+    label: String,
+    value: String,
+    accent: Color,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-        ),
-        shape = RoundedCornerShape(14.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(
+        // Sol: renk göstergesi
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary
-            )
+                .width(4.dp)
+                .height(48.dp)
+                .background(accent)
+        )
+        Spacer(modifier = Modifier.width(20.dp))
+        Column {
             Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface
+                text = label,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 3.sp
+                ),
+                color = RandGrey
             )
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                text = value,
+                style = MaterialTheme.typography.headlineLarge,
+                color = RandBlack
             )
         }
     }

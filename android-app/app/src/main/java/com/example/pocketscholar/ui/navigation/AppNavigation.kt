@@ -1,8 +1,8 @@
 package com.example.pocketscholar.ui.navigation
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -12,7 +12,7 @@ enum class AppScreen(
     val icon: ImageVector
 ) {
     Documents("Belgeler", Icons.Default.Description),
-    Chat("Sohbet", Icons.Default.Chat),
+    Chat("Sohbet", Icons.AutoMirrored.Filled.Chat),
     Models("AI Model", Icons.Default.CloudDownload),
     Stats("İstatistik", Icons.Default.BarChart)
 }

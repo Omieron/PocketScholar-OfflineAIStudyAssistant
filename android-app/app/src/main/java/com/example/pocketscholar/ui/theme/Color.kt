@@ -2,24 +2,34 @@ package com.example.pocketscholar.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// PocketScholar — akademik / çalışma odası hissi
-val Teal90 = Color(0xFF9EE7E2)
-val Teal70 = Color(0xFF5BC4BD)
-val Teal50 = Color(0xFF2D9D94)
-val Teal30 = Color(0xFF1A6B64)
-val Teal20 = Color(0xFF0F4A45)
+/*
+ * Paul Rand Paleti
+ * ────────────────
+ * "Design is the silent ambassador of your brand."
+ *
+ * Siyah + Sıcak beyaz + tek vurgu rengi (Teal).
+ * Rand'ın IBM, UPS, ABC logolarındaki gibi: az renk, çok etki.
+ */
 
-val Amber90 = Color(0xFFFFE082)
-val Amber70 = Color(0xFFFFC107)
-val Amber50 = Color(0xFFE6A800)
-val Amber30 = Color(0xFFB38600)
+// ── Ana Tonlar ──
+val RandBlack = Color(0xFF1A1A1A)
+val RandCharcoal = Color(0xFF2C2C2C)
+val RandDarkGrey = Color(0xFF4A4A4A)
+val RandGrey = Color(0xFF9E9E9E)
+val RandLightGrey = Color(0xFFE8E6E1)
+val RandOffWhite = Color(0xFFF5F3EE)      // Sıcak kağıt beyazı
+val RandWhite = Color(0xFFF8F7F4)
 
-// Dark theme
-val Teal80 = Color(0xFFB2F0EB)
-val TealGrey80 = Color(0xFFB8D4D2)
-val Amber80 = Color(0xFFFFECB3)
+// ── Vurgu: Teal ──
+val RandTeal = Color(0xFF2D9D94)
+val RandTealDark = Color(0xFF1A6B64)
+val RandTealLight = Color(0xFFE0F5F3)
+val RandTealMuted = Color(0xFF5BC4BD)
 
-// Light theme
-val Teal40 = Color(0xFF2D9D94)
-val TealGrey40 = Color(0xFF5C6B69)
-val Amber40 = Color(0xFFB38600)
+// ── İkincil Vurgu: Amber (uyarı/aksan) ──
+val RandAmber = Color(0xFFE6A800)
+val RandAmberLight = Color(0xFFFFF3D0)
+
+// ── Hata ──
+val RandRed = Color(0xFFD84315)
+val RandRedLight = Color(0xFFFFEBE6)
