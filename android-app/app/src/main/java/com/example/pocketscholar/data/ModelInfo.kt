@@ -10,6 +10,7 @@ data class ModelInfo(
     val sizeLabel: String,       // Kullanıcıya gösterilecek boyut (ör. "1.8 GB")
     val sizeInBytes: Long,       // Yaklaşık boyut (progress hesabı için)
     val downloadUrl: String,     // Hugging Face resolve/main URL
+    val huggingFaceUrl: String,  // Hugging Face model sayfası (kullanıcıya gösterilecek)
     val fileName: String,        // Kaydedilecek dosya adı
     val ramRequirement: String,  // Önerilen minimum RAM
     val tier: ModelTier          // Cihaz seviyesi
@@ -38,6 +39,7 @@ object AvailableModels {
             sizeLabel = "400 MB",
             sizeInBytes = 420_000_000L,
             downloadUrl = "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf",
+            huggingFaceUrl = "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF",
             fileName = "qwen2.5-0.5b-instruct-q4_k_m.gguf",
             ramRequirement = "2 GB RAM",
             tier = ModelTier.LIGHTWEIGHT
@@ -49,6 +51,7 @@ object AvailableModels {
             sizeLabel = "670 MB",
             sizeInBytes = 670_000_000L,
             downloadUrl = "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf",
+            huggingFaceUrl = "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF",
             fileName = "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf",
             ramRequirement = "3 GB RAM",
             tier = ModelTier.LIGHTWEIGHT
@@ -62,6 +65,7 @@ object AvailableModels {
             sizeLabel = "1.0 GB",
             sizeInBytes = 1_060_000_000L,
             downloadUrl = "https://huggingface.co/HuggingFaceTB/SmolLM2-1.7B-Instruct-GGUF/resolve/main/smollm2-1.7b-instruct-q4_k_m.gguf",
+            huggingFaceUrl = "https://huggingface.co/HuggingFaceTB/SmolLM2-1.7B-Instruct-GGUF",
             fileName = "smollm2-1.7b-instruct-q4_k_m.gguf",
             ramRequirement = "4 GB RAM",
             tier = ModelTier.BALANCED
@@ -73,6 +77,7 @@ object AvailableModels {
             sizeLabel = "1.7 GB",
             sizeInBytes = 1_710_000_000L,
             downloadUrl = "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf",
+            huggingFaceUrl = "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF",
             fileName = "gemma-2-2b-it-Q4_K_M.gguf",
             ramRequirement = "4 GB RAM",
             tier = ModelTier.BALANCED
@@ -86,6 +91,7 @@ object AvailableModels {
             sizeLabel = "1.9 GB",
             sizeInBytes = 2_020_000_000L,
             downloadUrl = "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+            huggingFaceUrl = "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF",
             fileName = "Llama-3.2-3B-Instruct-Q4_K_M.gguf",
             ramRequirement = "6 GB RAM",
             tier = ModelTier.POWERFUL
@@ -99,6 +105,7 @@ object AvailableModels {
             sizeLabel = "2.4 GB",
             sizeInBytes = 2_390_000_000L,
             downloadUrl = "https://huggingface.co/bartowski/Phi-3.5-mini-instruct-GGUF/resolve/main/Phi-3.5-mini-instruct-Q4_K_M.gguf",
+            huggingFaceUrl = "https://huggingface.co/bartowski/Phi-3.5-mini-instruct-GGUF",
             fileName = "Phi-3.5-mini-instruct-Q4_K_M.gguf",
             ramRequirement = "8 GB RAM",
             tier = ModelTier.ADVANCED

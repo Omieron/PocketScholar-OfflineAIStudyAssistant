@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
@@ -50,6 +51,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -65,6 +67,7 @@ fun ModelManagerScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    val uriHandler = LocalUriHandler.current
 
     // Hata ve başarı mesajları
     val error = uiState.error
@@ -138,7 +141,8 @@ fun ModelManagerScreen(
                         onDownload = { viewModel.downloadModel(model) },
                         onCancelDownload = { viewModel.cancelDownload() },
                         onActivate = { viewModel.activateModel(model.id) },
-                        onDelete = { viewModel.deleteModel(model.id) }
+                        onDelete = { viewModel.deleteModel(model.id) },
+                        onInfoClick = { uriHandler.openUri(model.huggingFaceUrl) }
                     )
                 }
             }
@@ -189,7 +193,8 @@ private fun ModelCard(
     onDownload: () -> Unit,
     onCancelDownload: () -> Unit,
     onActivate: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onInfoClick: () -> Unit
 ) {
     val containerColor = when {
         isActive -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
@@ -238,6 +243,17 @@ private fun ModelCard(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+                // ℹ️ Hugging Face sayfası linki
+                IconButton(
+                    onClick = onInfoClick,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Info,
+                        contentDescription = "Model bilgisi (Hugging Face)",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
                 }
             }
