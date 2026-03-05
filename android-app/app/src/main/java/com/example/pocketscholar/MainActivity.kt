@@ -62,7 +62,7 @@ class MainActivity : ComponentActivity() {
             withContext(Dispatchers.IO) {
                 val modelPath = modelRepo.findAnyAvailableModelPath()
                 if (modelPath != null) {
-                    LlamaEngine.loadModel(modelPath)
+                    LlamaEngine.loadModel(applicationContext, modelPath)
                 }
             }
         }

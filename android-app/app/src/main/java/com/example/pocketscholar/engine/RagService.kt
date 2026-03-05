@@ -15,9 +15,11 @@ private const val TAG = "RagService"
 object RagService {
 
     // Instruct-style prompt - small models follow this better
+    // Placeholders: %s = optional previous conversation block, %s = context (chunks), %s = current question
     private val RAG_PROMPT_TEMPLATE = """
 ### Instruction:
 Answer the question using ONLY the information below. Be brief and precise.
+%s
 
 ### Context:
 %s
@@ -31,8 +33,23 @@ Answer the question using ONLY the information below. Be brief and precise.
     // Context limit: ~1500 chars ≈ ~400 tokens, plus prompt template + query ≈ ~100 tokens = ~500 tokens total
     // This fits well within max_prompt_tokens = 1500 in llama_jni.cpp
     private const val MAX_CONTEXT_CHARS = 1500
+    // Conversation history: limit chars so total prompt stays within llama_jni limits
+    private const val MAX_CONVERSATION_CHARS = 800
     // Fewer chunks = more focused context
     private const val DEFAULT_TOP_K = 5
+
+    // When no RAG chunks found: still call LLM so user gets an answer (model runs)
+    private val NO_CONTEXT_PROMPT_TEMPLATE = """
+### Instruction:
+Answer the question briefly.
+%s
+
+### Question:
+%s
+
+### Response:""".trimIndent()
+
+    private const val NO_CONTEXT_PREFIX = "Belgelerde ilgili bilgi bulunamadı; genel yanıt: "
 
     /**
      * Kaynak bilgisi: UI'da "Kaynak: sayfa 2, 4" gibi gösterilmek üzere.
@@ -47,9 +64,11 @@ Answer the question using ONLY the information below. Be brief and precise.
     /**
      * Soruya RAG ile cevap üretir: vector store'dan top-k chunk alır, prompt şablonunda
      * context oluşturur (karakter limiti ile), LlamaEngine.prompt çağırır.
+     * Multi-turn: [conversationHistory] verilirse prompt'a "Previous conversation" bölümü eklenir.
      *
      * @param query Kullanıcının sorduğu metin
      * @param vectorStore Vector store repository (embedding + chunk arama)
+     * @param conversationHistory Son N tur (user, assistant) çiftleri; null/empty ise eklenmez
      * @param topK Alınacak chunk sayısı (varsayılan 10)
      * @param documentIds Belirli dokümanlarda arama yapmak için (opsiyonel, null = tüm dokümanlar)
      * @param minSimilarity Minimum benzerlik eşiği (varsayılan 0.15)
@@ -58,6 +77,7 @@ Answer the question using ONLY the information below. Be brief and precise.
     suspend fun ask(
         query: String,
         vectorStore: VectorStoreRepository,
+        conversationHistory: List<Pair<String, String>>? = null,
         topK: Int = DEFAULT_TOP_K,
         documentIds: List<String>? = null,
         minSimilarity: Float = VectorUtils.DEFAULT_MIN_SIMILARITY
@@ -72,13 +92,28 @@ Answer the question using ONLY the information below. Be brief and precise.
         }
         
         if (scoredChunks.isEmpty()) {
-            Log.w(TAG, "No relevant chunks found for query. Try lowering minSimilarity threshold.")
-            return RagResult("Yüklenmiş belgelerde bu konuyla ilgili bilgi bulunamadı. Lütfen soruyu daha spesifik sormayı deneyin.", emptyList())
+            Log.w(TAG, "No relevant chunks found for query. Calling LLM without RAG context.")
+            val conversationBlock = if (conversationHistory.isNullOrEmpty()) {
+                ""
+            } else {
+                val formatted = formatConversationHistory(conversationHistory!!, MAX_CONVERSATION_CHARS)
+                "\n### Previous conversation:\n$formatted\n"
+            }
+            val noContextPrompt = NO_CONTEXT_PROMPT_TEMPLATE.format(conversationBlock, query)
+            var answer = LlamaEngine.prompt(noContextPrompt) ?: "Cevap oluşturulamadı."
+            answer = sanitizeResponse(answer)
+            return RagResult("$NO_CONTEXT_PREFIX$answer", emptyList())
         }
-        
+
         val chunks = scoredChunks.map { it.chunk }
         val context = buildContextWithLimit(chunks, MAX_CONTEXT_CHARS)
-        val prompt = RAG_PROMPT_TEMPLATE.format(context, query)
+        val conversationBlock = if (conversationHistory.isNullOrEmpty()) {
+            ""
+        } else {
+            val formatted = formatConversationHistory(conversationHistory!!, MAX_CONVERSATION_CHARS)
+            "\n### Previous conversation:\n$formatted\n"
+        }
+        val prompt = RAG_PROMPT_TEMPLATE.format(conversationBlock, context, query)
         
         // Log the full context to debug what LLM sees
         Log.d(TAG, "=== CONTEXT SENT TO LLM ===")
@@ -237,6 +272,29 @@ Answer the question using ONLY the information below. Be brief and precise.
         }
         
         return text
+    }
+
+    /**
+     * Formats conversation history for the prompt: "User: ... Assistant: ..." per turn.
+     * Truncates to [maxChars] by dropping oldest turns if needed.
+     */
+    private fun formatConversationHistory(pairs: List<Pair<String, String>>, maxChars: Int): String {
+        if (pairs.isEmpty()) return ""
+        val sb = StringBuilder()
+        for ((user, assistant) in pairs) {
+            if (sb.isNotEmpty()) sb.append("\n\n")
+            sb.append("User: ").append(user.trim())
+            sb.append("\nAssistant: ").append(assistant.trim())
+        }
+        var result = sb.toString()
+        if (result.length > maxChars) {
+            result = result.takeLast(maxChars).let { truncated ->
+                val firstNewline = truncated.indexOf('\n')
+                if (firstNewline in 1..(maxChars - 1)) truncated.substring(firstNewline).trim()
+                else truncated
+            }
+        }
+        return result
     }
 
     /**
