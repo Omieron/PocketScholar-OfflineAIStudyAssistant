@@ -79,8 +79,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             text = text
         )
         
-        // Get selected document IDs (null means search all)
-        val selectedIds = _uiState.value.selectedDocumentIds.toList().ifEmpty { null }
+        // When no document selected: skip RAG, answer with system prompt only (remind that app is for PDFs)
+        val selectedIds = _uiState.value.selectedDocumentIds.toList()
+        val skipRagContext = selectedIds.isEmpty()
+        val documentIdsForRag = if (selectedIds.isEmpty()) null else selectedIds
         
         _uiState.update {
             it.copy(
@@ -101,7 +103,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     val result = RagService.ask(
                         query = text,
                         vectorStore = vectorStore,
-                        documentIds = selectedIds
+                        documentIds = documentIdsForRag,
+                        skipRagContext = skipRagContext
                     )
                     var answer = result.answer
                     val isModelNotLoaded = answer.contains("Model not loaded", ignoreCase = true) || answer.contains("Call loadModel() first")

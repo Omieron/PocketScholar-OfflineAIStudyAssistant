@@ -51,6 +51,27 @@ Answer the question briefly.
 
     private const val NO_CONTEXT_PREFIX = "Belgelerde ilgili bilgi bulunamadı; genel yanıt: "
 
+    /** System prompt when user has not selected any document: no chunks, remind that app is for PDFs. */
+    private val SYSTEM_PROMPT_NO_SOURCE = """
+### System:
+This app is for answering from the user's PDFs, not general chat. Reply in 1-2 short sentences in Turkish. Be brief and polite. Do not ask the user questions about yourself. Do not repeat the same phrase.
+
+### Instruction:
+Answer the question in one or two short sentences only. Be brief and polite; do not ask questions back. Do not repeat yourself.
+""".trimIndent()
+
+    /** Fixed reminder appended when no document selected so user always sees it even if model drifts. */
+    private const val NO_SOURCE_REMINDER = "\n\nBu uygulama yüklediğiniz PDF'lerle çalışmak içindir; belgeye dayalı yanıt için Belgeler'den kaynak seçin."
+
+    private val NO_SOURCE_PROMPT_TEMPLATE = """
+$SYSTEM_PROMPT_NO_SOURCE
+%s
+
+### Question:
+%s
+
+### Response:""".trimIndent()
+
     /**
      * Kaynak bilgisi: UI'da "Kaynak: sayfa 2, 4" gibi gösterilmek üzere.
      */
@@ -71,6 +92,7 @@ Answer the question briefly.
      * @param conversationHistory Son N tur (user, assistant) çiftleri; null/empty ise eklenmez
      * @param topK Alınacak chunk sayısı (varsayılan 10)
      * @param documentIds Belirli dokümanlarda arama yapmak için (opsiyonel, null = tüm dokümanlar)
+     * @param skipRagContext true ise chunk araması yapılmaz; sadece system prompt ile kısa yanıt + "PDF'lerle çalışmak için kaynak seçin" hatırlatması
      * @param minSimilarity Minimum benzerlik eşiği (varsayılan 0.15)
      * @return Cevap metni + kaynak (documentId, pageNumber, similarity) listesi
      */
@@ -80,8 +102,33 @@ Answer the question briefly.
         conversationHistory: List<Pair<String, String>>? = null,
         topK: Int = DEFAULT_TOP_K,
         documentIds: List<String>? = null,
+        skipRagContext: Boolean = false,
         minSimilarity: Float = VectorUtils.DEFAULT_MIN_SIMILARITY
     ): RagResult {
+        if (skipRagContext) {
+            Log.d(TAG, "No document selected: answering without RAG (system prompt only).")
+            val conversationBlock = if (conversationHistory.isNullOrEmpty()) {
+                ""
+            } else {
+                val formatted = formatConversationHistory(conversationHistory!!, MAX_CONVERSATION_CHARS)
+                "\n### Previous conversation:\n$formatted\n"
+            }
+            val prompt = NO_SOURCE_PROMPT_TEMPLATE.format(conversationBlock, query)
+            var answer = LlamaEngine.prompt(prompt) ?: "Cevap oluşturulamadı."
+            answer = sanitizeResponse(answer)
+            answer = truncateRepetition(answer)
+            // Remove our reminder if model already echoed it so we append it only once
+            val reminderText = "Bu uygulama yüklediğiniz PDF'lerle çalışmak içindir; belgeye dayalı yanıt için Belgeler'den kaynak seçin."
+            answer = answer.replace(reminderText, "").trim()
+            // Strict length cap for no-source path so repetitive/garbage output is never shown
+            if (answer.length > 280) {
+                val cut = answer.take(280)
+                val lastEnd = cut.lastIndexOfAny(charArrayOf('.', '!', '?'))
+                answer = if (lastEnd > 100) cut.take(lastEnd + 1) else cut.trimEnd() + "..."
+            }
+            return RagResult(answer.trim() + NO_SOURCE_REMINDER, emptyList())
+        }
+
         val scoredChunks = vectorStore.searchSimilarWithScores(query, topK, documentIds, minSimilarity)
         
         // Log the search results for debugging
@@ -141,6 +188,19 @@ Answer the question briefly.
      */
     private fun sanitizeResponse(response: String): String {
         var cleaned = response.trim()
+
+        // 0. Remove any line that looks like our prompt (### System:, ### Instruction:, etc.) so it never leaks to user
+        val promptLikeLines = setOf(
+            "this app is for answering from the user's pdfs, not general chat.",
+            "reply in 1-2 short sentences in turkish. do not repeat the same phrase.",
+            "answer the question in one or two short sentences only. do not repeat yourself."
+        )
+        cleaned = cleaned.lines()
+            .filterNot { line ->
+                val t = line.trim()
+                t.startsWith("### ") || promptLikeLines.any { t.equals(it, ignoreCase = true) }
+            }
+            .joinToString("\n").trim()
         
         // 1. Remove prompt fragments only if they appear at the START (first 100 chars)
         val leadingFragments = listOf(
@@ -176,10 +236,13 @@ Answer the question briefly.
         
         // 3. Truncate at TRAILING prompt echoes (LLM repeats the prompt after answer)
         val trailingMarkers = listOf(
-            "### Instruction:", "### Context:", "### Question:", "### Response:",
+            "### System:", "### Instruction:", "### Context:", "### Question:", "### Response:",
+            "### System ", "### Instruction ",
             "Q:", "Question:", "Context:", "Answer briefly",
             "Answer based ONLY", "Based on the context",
-            "Answer the question using"
+            "Answer the question using",
+            "This app is for answering from the user's PDFs",
+            "Do not repeat the same phrase"
         )
         for (marker in trailingMarkers) {
             // Only look after the first 30 chars (the answer should have started by then)
@@ -212,7 +275,23 @@ Answer the question briefly.
      */
     private fun truncateRepetition(text: String): String {
         if (text.length < 30) return text
-        
+
+        // 0. Detect repeated sentence/phrase (e.g. "1 January'da ne yapabiliriz?" repeated)
+        val sentenceEnds = listOf(". ", "? ", "! ", ".\n", "?\n", "!\n")
+        var pos = 0
+        while (pos < text.length - 20) {
+            val nextEnd = sentenceEnds.mapNotNull { text.indexOf(it, pos).takeIf { i -> i >= 0 } }.minOrNull() ?: break
+            val sentence = text.substring(pos, nextEnd + 1).trim()
+            if (sentence.length in 15..200) {
+                val second = text.indexOf(sentence, nextEnd + 2)
+                if (second != -1) {
+                    Log.w(TAG, "Detected repeated sentence: '${sentence.take(50)}...'")
+                    return text.substring(0, second).trim()
+                }
+            }
+            pos = nextEnd + 1
+        }
+
         // Split into lines for line-based repetition detection
         val lines = text.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
         
