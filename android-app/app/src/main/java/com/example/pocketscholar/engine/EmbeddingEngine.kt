@@ -24,6 +24,22 @@ private const val TAG = "EmbeddingEngine"
  */
 class EmbeddingEngine(private val context: Context) {
 
+    /**
+     * Özet bilgi: hangi dosyadan, kaç boyutlu, hangi input tipini kullanıyor?
+     */
+    data class EmbeddingModelInfo(
+        val fileName: String,
+        val dimension: Int,
+        val inputType: InputType,
+        val usesSentencePiece: Boolean,
+        val maxSequenceLength: Int
+    )
+
+    enum class InputType {
+        STRING,
+        INT32
+    }
+
     private var dim: Int = EMBEDDING_DIM
     private var interpreter: InterpreterApi? = null
     private val modelFile: File? = copyAssetToCache(MODEL_ASSET)
@@ -126,6 +142,23 @@ class EmbeddingEngine(private val context: Context) {
     fun embeddingDimension(): Int = dim
 
     fun isModelLoaded(): Boolean = interpreter != null
+
+    /**
+     * Yüklü embedding modeli hakkında özet bilgi döner.
+     * Model yüklenmemişse veya asset bulunamamışsa null.
+     */
+    fun modelInfo(): EmbeddingModelInfo? {
+        val interp = interpreter ?: return null
+        val file = modelFile ?: return null
+        val type = if (useInt32Input) InputType.INT32 else InputType.STRING
+        return EmbeddingModelInfo(
+            fileName = file.name,
+            dimension = dim,
+            inputType = type,
+            usesSentencePiece = useSentencePiece,
+            maxSequenceLength = maxSeqLen
+        )
+    }
 
     fun embed(text: String): FloatArray {
         if (text.isBlank()) return FloatArray(dim) { 0f }
