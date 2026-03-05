@@ -33,7 +33,7 @@ data class ChatUiState(
     val selectedDocumentIds: Set<String> = emptySet()
 )
 
-private const val CONVERSATION_HISTORY_MAX_MESSAGES = 6  // last 3 user/assistant pairs for multi-turn context
+private const val CONVERSATION_HISTORY_LIMIT = 5  // last N messages for multi-turn (README §3.2: "son 5 mesaj")
 
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -104,7 +104,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     // Multi-turn: last N messages (user/assistant pairs) as conversation history
                     val allMessages = _uiState.value.messages
-                    val historyMessages = allMessages.dropLast(1).takeLast(CONVERSATION_HISTORY_MAX_MESSAGES)
+                    val historyMessages = allMessages.dropLast(1).takeLast(CONVERSATION_HISTORY_LIMIT)
                     val conversationHistory = buildConversationPairs(historyMessages)
                     val result = RagService.ask(
                         query = text,
