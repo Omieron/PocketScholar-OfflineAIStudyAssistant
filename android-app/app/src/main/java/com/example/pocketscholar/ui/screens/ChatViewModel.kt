@@ -99,9 +99,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         documentIds = selectedIds  // Pass selected docs!
                     )
                     var answer = result.answer
-                    // LLM yüklü değilse JNI'den gelen İngilizce mesajı Türkçe açıklamayla değiştir
+                    // LLM yüklü değilse JNI'den gelen İngilizce mesajı Türkçe, Settings'e yönlendiren açıklamayla değiştir
                     if (answer.contains("Model not loaded", ignoreCase = true) || answer.contains("Call loadModel() first")) {
-                        answer = "Model henüz yüklenmedi. Cevap üretmek için cihaza model.gguf yüklemeniz gerekiyor (README_RAG bölüm 7: adb push ... files/model.gguf)."
+                        answer = "Model henüz yüklenmedi. Cevap üretmek için Ayarlar > LLM Model bölümünden cihazınızdaki bir GGUF dosyasını seçip modeli yükleyin."
                     }
                     val sourceLine = if (result.sources.isNotEmpty()) {
                         val pages = result.sources.map { it.pageNumber }.distinct().sorted()

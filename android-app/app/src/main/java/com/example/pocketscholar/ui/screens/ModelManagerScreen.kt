@@ -60,6 +60,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.pocketscholar.data.ModelInfo
 import com.example.pocketscholar.data.ModelTier
+import com.example.pocketscholar.data.LocalModelScanner
 
 /*
  * Paul Rand felsefesi:
@@ -78,13 +79,128 @@ private val RandGrey = Color(0xFF9E9E9E)
 private val RandLightGrey = Color(0xFFEEECE8)
 private val RandDanger = Color(0xFFD84315)
 
+@Composable
+private fun QuickSettingsSection(
+    state: SettingsUiState,
+    onScanLocal: () -> Unit,
+    onSelectLocal: (LocalModelScanner.LocalModelFile) -> Unit,
+    onClearLocal: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        // LLM Model (GGUF) kartı
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = RandLightGrey.copy(alpha = 0.4f))
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Storage,
+                        contentDescription = null,
+                        tint = RandBlack
+                    )
+                    Text(
+                        text = "LLM Model (GGUF)",
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                        color = RandBlack
+                    )
+                }
+                val statusText = when (val s = state.llmModelStatus) {
+                    is LlmModelStatus.Loaded -> {
+                        val name = s.path.substringAfterLast('/')
+                        val mb = s.sizeBytes / (1024 * 1024)
+                        "Yüklü: $name – ${mb} MB"
+                    }
+                    is LlmModelStatus.Error -> s.message
+                    LlmModelStatus.NotLoaded -> "Model yüklü değil."
+                }
+                Text(
+                    text = statusText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = RandGrey
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        modifier = Modifier.weight(1f),
+                        onClick = onScanLocal,
+                        enabled = !state.isScanning
+                    ) {
+                        Text(
+                            text = if (state.isScanning) "Taranıyor…" else "Cihazda Tara",
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Embedding Modeli kartı
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Color.White)
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Memory,
+                        contentDescription = null,
+                        tint = RandBlack
+                    )
+                    Text(
+                        text = "Embedding Modeli",
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                        color = RandBlack
+                    )
+                }
+                val embeddingText = when (val s = state.embeddingStatus) {
+                    is EmbeddingStatus.Loaded ->
+                        "Embedding modeli yüklü (dim: ${s.dimension}, kaynak: ${s.source})."
+                    is EmbeddingStatus.Error ->
+                        "Embedding modeli hatası: ${s.message}"
+                    EmbeddingStatus.NotFound ->
+                        "Embedding modeli bulunamadı. PDF aramalarında semantik benzerlik kullanılamaz."
+                }
+                Text(
+                    text = embeddingText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = RandGrey
+                )
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModelManagerScreen(
     modifier: Modifier = Modifier,
-    viewModel: ModelManagerViewModel = viewModel()
+    viewModel: ModelManagerViewModel = viewModel(),
+    settingsViewModel: SettingsViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val settingsState by settingsViewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val uriHandler = LocalUriHandler.current
 
@@ -96,6 +212,10 @@ fun ModelManagerScreen(
     val success = uiState.successMessage
     LaunchedEffect(success) {
         success?.let { snackbarHostState.showSnackbar(it); viewModel.clearSuccessMessage() }
+    }
+    // Model etkinleştirilince üstteki "LLM Model (GGUF)" kartının güncellenmesi için
+    LaunchedEffect(uiState.activeModelId) {
+        settingsViewModel.refreshStatus()
     }
 
     Scaffold(
@@ -109,6 +229,16 @@ fun ModelManagerScreen(
                 .padding(innerPadding),
             verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
+                // ── Hızlı Ayarlar: Yerel LLM Model + Embedding durumu ──
+                item {
+                    QuickSettingsSection(
+                        state = settingsState,
+                        onScanLocal = { settingsViewModel.scanForModels() },
+                        onSelectLocal = { file -> settingsViewModel.selectAndLoadModel(file) },
+                        onClearLocal = { settingsViewModel.clearModel() }
+                    )
+                }
+
             // ── Başlık Bloğu ──
             item { RandHeader() }
 

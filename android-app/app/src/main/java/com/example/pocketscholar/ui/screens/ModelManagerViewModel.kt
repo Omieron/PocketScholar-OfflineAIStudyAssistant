@@ -7,7 +7,6 @@ import com.example.pocketscholar.data.AvailableModels
 import com.example.pocketscholar.data.DownloadStatus
 import com.example.pocketscholar.data.ModelInfo
 import com.example.pocketscholar.data.ModelRepository
-import com.example.pocketscholar.engine.EmbeddingEngine
 import com.example.pocketscholar.engine.LlamaEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -26,11 +25,7 @@ data class ModelManagerUiState(
     val downloadProgress: Int = 0,  // 0-100
     val isLoadingModel: Boolean = false,
     val error: String? = null,
-    val successMessage: String? = null,
-    // Embedding (TFLite) model durumu
-    val isEmbeddingModelLoaded: Boolean = false,
-    val embeddingDimension: Int? = null,
-    val embeddingWarning: String? = null
+    val successMessage: String? = null
 )
 
 class ModelManagerViewModel(application: Application) : AndroidViewModel(application) {
@@ -39,28 +34,9 @@ class ModelManagerViewModel(application: Application) : AndroidViewModel(applica
     val uiState: StateFlow<ModelManagerUiState> = _uiState.asStateFlow()
 
     private val modelRepo = ModelRepository(application)
-    private val embeddingEngine = EmbeddingEngine(application)
 
     init {
         refresh()
-        // Embedding model durumu: RAG aramalarında semantik benzerlik kullanılabilecek mi?
-        viewModelScope.launch(Dispatchers.IO) {
-            // Basit warmup: interpreter yoksa veya inference hata verirse tüm değerler 0 döner
-            val warmup = embeddingEngine.embed("warmup")
-            val loaded = embeddingEngine.isModelLoaded() && warmup.any { it != 0f }
-            val dim = if (loaded) embeddingEngine.embeddingDimension() else null
-            _uiState.update {
-                it.copy(
-                    isEmbeddingModelLoaded = loaded,
-                    embeddingDimension = dim,
-                    embeddingWarning = if (!loaded) {
-                        "Embedding modeli yüklenemedi. PDF aramalarında semantik benzerlik kullanılamayacak; lütfen assets içine 'embedding_model.tflite' ekleyin veya uyumlu bir modeli uygulamaya dahil edin."
-                    } else {
-                        null
-                    }
-                )
-            }
-        }
     }
 
     fun refresh() {
@@ -138,10 +114,11 @@ class ModelManagerViewModel(application: Application) : AndroidViewModel(applica
                     val modelPath = modelRepo.getModelPath(modelId)
                         ?: throw IllegalStateException("Model dosyası bulunamadı")
 
-                    // Mevcut modeli kaldır
-                    LlamaEngine.unload()
-                    // Yeni modeli yükle
-                    val success = LlamaEngine.loadModel(modelPath)
+                    // Mevcut modeli kaldır (JNI + Kotlin state + prefs)
+                    LlamaEngine.unloadAndReset()
+                    LlamaEngine.clearPersistedModel(getApplication())
+                    // Yeni modeli yükle; context ile çağır ki Kotlin state ve prefs güncellensin
+                    val success = LlamaEngine.loadModel(getApplication(), modelPath)
                     if (!success) throw IllegalStateException("Model yüklenemedi")
 
                     modelRepo.setActiveModelId(modelId)
@@ -168,7 +145,8 @@ class ModelManagerViewModel(application: Application) : AndroidViewModel(applica
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 if (modelRepo.getActiveModelId() == modelId) {
-                    LlamaEngine.unload()
+                    LlamaEngine.unloadAndReset()
+                    LlamaEngine.clearPersistedModel(getApplication())
                 }
                 modelRepo.deleteModel(modelId)
             }

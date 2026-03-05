@@ -2,6 +2,7 @@ package com.example.pocketscholar.engine
 
 import android.content.Context
 import android.util.Log
+import com.example.pocketscholar.data.SettingsRepository
 import java.io.File
 
 /**
@@ -14,9 +15,6 @@ import java.io.File
 object LlamaEngine {
 
     private const val TAG = "LlamaEngine"
-    private const val PREFS_NAME = "llama_engine_prefs"
-    private const val KEY_MODEL_PATH = "model_path"
-    private const val KEY_MODEL_LAST_LOADED_AT = "model_last_loaded_at"
 
     // Kotlin tarafında tutulan basit durum bilgisi; JNI tarafı başarısız olursa false'a çekilir.
     @Volatile
@@ -51,13 +49,11 @@ object LlamaEngine {
     fun isModelLoaded(): Boolean = isLoadedFlag
 
     /**
-     * SharedPreferences'ta kayıtlı (varsa) son model yolunu döner; dosyanın hala var olup
-     * olmadığını kontrol ETMEZ, sadece string'i okur.
+     * SharedPreferences'ta kayıtlı (varsa) son model yolunu döner (SettingsRepository üzerinden);
+     * dosyanın hala var olup olmadığını kontrol ETMEZ, sadece string'i okur.
      */
-    fun getPersistedModelPath(context: Context): String? {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        return prefs.getString(KEY_MODEL_PATH, null)
-    }
+    fun getPersistedModelPath(context: Context): String? =
+        SettingsRepository(context).getLlmModelPath()
 
     /**
      * Modeli belirtilen path'ten yükler, başarılı olursa SharedPreferences'a kaydeder.
@@ -86,11 +82,9 @@ object LlamaEngine {
         if (success) {
             isLoadedFlag = true
             currentModelPath = modelPath
-            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            prefs.edit()
-                .putString(KEY_MODEL_PATH, modelPath)
-                .putLong(KEY_MODEL_LAST_LOADED_AT, System.currentTimeMillis())
-                .apply()
+            val repo = SettingsRepository(context)
+            repo.setLlmModelPath(modelPath)
+            repo.setLlmModelLastLoadedAt(System.currentTimeMillis())
             Log.i(TAG, "Model loaded successfully and persisted to prefs.")
         } else {
             isLoadedFlag = false
@@ -102,12 +96,11 @@ object LlamaEngine {
     }
 
     /**
-     * Son kullanılan model yolunu SharedPreferences'tan okuyup varsa tekrar yüklemeyi dener.
+     * Son kullanılan model yolunu SettingsRepository'den okuyup varsa tekrar yüklemeyi dener.
      * Dosya bulunamazsa veya yükleme başarısız olursa false döner.
      */
     fun restoreLastModelIfAvailable(context: Context): Boolean {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val path = prefs.getString(KEY_MODEL_PATH, null) ?: return false
+        val path = SettingsRepository(context).getLlmModelPath() ?: return false
         val file = File(path)
         if (!file.exists() || !file.isFile) {
             Log.w(TAG, "Persisted model path no longer exists on disk: $path")
@@ -131,15 +124,11 @@ object LlamaEngine {
     }
 
     /**
-     * Persisted model bilgisini temizler (SharedPreferences) ve lokal state'i sıfırlar.
+     * Persisted model bilgisini temizler (SettingsRepository) ve lokal state'i sıfırlar.
      * Genellikle kullanıcı "modeli kaldır" dediğinde çağrılır.
      */
     fun clearPersistedModel(context: Context) {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        prefs.edit()
-            .remove(KEY_MODEL_PATH)
-            .remove(KEY_MODEL_LAST_LOADED_AT)
-            .apply()
+        SettingsRepository(context).clearLlmModel()
         isLoadedFlag = false
         currentModelPath = null
     }

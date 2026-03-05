@@ -48,7 +48,9 @@ class DocumentsViewModel(application: Application) : AndroidViewModel(applicatio
             val warmup = embeddingEngine.embed("warmup")
             if (!embeddingEngine.isModelLoaded() || warmup.all { it == 0f }) {
                 _uiState.update {
-                    it.copy(embeddingWarning = "Embedding model yüklenemedi. Chunk'lar sıfır vektörle kaydedilecek; semantic arama çalışmaz. Logcat'te 'EmbeddingEngine' veya 'TFSentencepieceTokenizeOp' arayın. README'deki uyumlu modeli kullanın.")
+                    it.copy(
+                        embeddingWarning = "Embedding modeli bulunamadı veya yüklenemedi. PDF'ler yine işlenir ancak semantik arama çalışmaz; Ayarlar > Embedding Modeli bölümünden uyumlu bir TFLite modeli ekleyin."
+                    )
                 }
             }
         }
