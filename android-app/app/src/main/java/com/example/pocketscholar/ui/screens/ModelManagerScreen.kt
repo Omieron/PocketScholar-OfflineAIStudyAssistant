@@ -38,8 +38,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -47,7 +49,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -129,6 +133,14 @@ private fun QuickSettingsSection(
                     style = MaterialTheme.typography.bodySmall,
                     color = RandGrey
                 )
+                if (state.llmModelStatus is LlmModelStatus.NotLoaded) {
+                    Text(
+                        text = "Lütfen aşağıdaki modellerden birini indirip etkinleştirin.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = RandDanger,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -202,6 +214,7 @@ fun ModelManagerScreen(
     val uiState by viewModel.uiState.collectAsState()
     val settingsState by settingsViewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    var showNoModelDialog by remember { mutableStateOf(false) }
     val uriHandler = LocalUriHandler.current
 
     // Mesajlar
@@ -223,17 +236,23 @@ fun ModelManagerScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = RandWhite
     ) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-            verticalArrangement = Arrangement.spacedBy(0.dp)
-        ) {
+        Box(Modifier.fillMaxSize().padding(innerPadding)) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(0.dp)
+            ) {
                 // ── Hızlı Ayarlar: Yerel LLM Model + Embedding durumu ──
                 item {
                     QuickSettingsSection(
                         state = settingsState,
-                        onScanLocal = { settingsViewModel.scanForModels() },
+                        onScanLocal = {
+                            val noUsableLlm = settingsState.llmModelStatus is LlmModelStatus.NotLoaded ||
+                                settingsState.llmModelStatus is LlmModelStatus.Error
+                            if (noUsableLlm) {
+                                showNoModelDialog = true
+                            }
+                            settingsViewModel.scanForModels()
+                        },
                         onSelectLocal = { file -> settingsViewModel.selectAndLoadModel(file) },
                         onClearLocal = { settingsViewModel.clearModel() }
                     )
@@ -269,6 +288,22 @@ fun ModelManagerScreen(
 
             // Alt boşluk
             item { Spacer(modifier = Modifier.height(32.dp)) }
+            }
+
+            if (showNoModelDialog) {
+                AlertDialog(
+                    onDismissRequest = { showNoModelDialog = false },
+                    title = { Text("Model yüklü değil") },
+                    text = {
+                        Text("Hiçbir model yüklü değil. Lütfen aşağıdaki modellerden birini indirip etkinleştirin.")
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showNoModelDialog = false }) {
+                            Text("Tamam")
+                        }
+                    }
+                )
+            }
         }
     }
 }

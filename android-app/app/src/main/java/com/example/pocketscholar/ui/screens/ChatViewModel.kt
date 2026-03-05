@@ -8,6 +8,7 @@ import com.example.pocketscholar.data.DocumentRepository
 import com.example.pocketscholar.data.db.AppDatabase
 import com.example.pocketscholar.data.VectorStoreRepository
 import com.example.pocketscholar.engine.EmbeddingEngine
+import com.example.pocketscholar.engine.LlamaEngine
 import com.example.pocketscholar.engine.RagService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -93,17 +94,21 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             val replyId = "assistant_${System.currentTimeMillis()}"
             val replyText = withContext(Dispatchers.IO) {
                 try {
+                    // If no model is loaded, do not call RAG at all — no sources, no junk output
+                    if (!LlamaEngine.isModelLoaded()) {
+                        return@withContext "Model henüz yüklenmedi. Cevap üretmek için Ayarlar > LLM Model bölümünden cihazınızdaki bir GGUF dosyasını seçip modeli yükleyin."
+                    }
                     val result = RagService.ask(
-                        query = text, 
+                        query = text,
                         vectorStore = vectorStore,
-                        documentIds = selectedIds  // Pass selected docs!
+                        documentIds = selectedIds
                     )
                     var answer = result.answer
-                    // LLM yüklü değilse JNI'den gelen İngilizce mesajı Türkçe, Settings'e yönlendiren açıklamayla değiştir
-                    if (answer.contains("Model not loaded", ignoreCase = true) || answer.contains("Call loadModel() first")) {
+                    val isModelNotLoaded = answer.contains("Model not loaded", ignoreCase = true) || answer.contains("Call loadModel() first")
+                    if (isModelNotLoaded) {
                         answer = "Model henüz yüklenmedi. Cevap üretmek için Ayarlar > LLM Model bölümünden cihazınızdaki bir GGUF dosyasını seçip modeli yükleyin."
                     }
-                    val sourceLine = if (result.sources.isNotEmpty()) {
+                    val sourceLine = if (!isModelNotLoaded && result.sources.isNotEmpty()) {
                         val pages = result.sources.map { it.pageNumber }.distinct().sorted()
                         "\n\nKaynak: sayfa ${pages.joinToString(", ")}"
                     } else ""
