@@ -32,8 +32,9 @@ Answer the question using ONLY the information below. Be brief and precise.
     private const val CHUNK_SEPARATOR = "\n\n"
     // Context limit: ~1500 chars ≈ ~400 tokens, plus prompt template + query ≈ ~100 tokens = ~500 tokens total
     // This fits well within max_prompt_tokens = 1500 in llama_jni.cpp
+    // Chunk context only; conversation has its own limit (plan §4)
     private const val MAX_CONTEXT_CHARS = 1500
-    // Conversation history: limit chars so total prompt stays within llama_jni limits
+    // Conversation history; if over limit we drop oldest (user, assistant) pairs
     private const val MAX_CONVERSATION_CHARS = 800
     // Fewer chunks = more focused context
     private const val DEFAULT_TOP_K = 5
@@ -355,24 +356,30 @@ $SYSTEM_PROMPT_NO_SOURCE
 
     /**
      * Formats conversation history for the prompt: "User: ... Assistant: ..." per turn.
-     * Truncates to [maxChars] by dropping oldest turns if needed.
+     * Keeps total length within [maxChars]: if over limit, drops oldest (user, assistant) pairs
+     * so we never cut mid-message (plan §4: "mesaj sayısını azalt").
      */
     private fun formatConversationHistory(pairs: List<Pair<String, String>>, maxChars: Int): String {
         if (pairs.isEmpty()) return ""
-        val sb = StringBuilder()
-        for ((user, assistant) in pairs) {
-            if (sb.isNotEmpty()) sb.append("\n\n")
-            sb.append("User: ").append(user.trim())
-            sb.append("\nAssistant: ").append(assistant.trim())
-        }
-        var result = sb.toString()
-        if (result.length > maxChars) {
-            result = result.takeLast(maxChars).let { truncated ->
-                val firstNewline = truncated.indexOf('\n')
-                if (firstNewline in 1..(maxChars - 1)) truncated.substring(firstNewline).trim()
-                else truncated
+        var usedPairs = pairs
+        var result = buildString {
+            for ((user, assistant) in usedPairs) {
+                if (isNotEmpty()) append("\n\n")
+                append("User: ").append(user.trim())
+                append("\nAssistant: ").append(assistant.trim())
             }
         }
+        while (result.length > maxChars && usedPairs.size > 1) {
+            usedPairs = usedPairs.drop(1)
+            result = buildString {
+                for ((user, assistant) in usedPairs) {
+                    if (isNotEmpty()) append("\n\n")
+                    append("User: ").append(user.trim())
+                    append("\nAssistant: ").append(assistant.trim())
+                }
+            }
+        }
+        if (result.length > maxChars) result = result.takeLast(maxChars).trimStart()
         return result
     }
 
