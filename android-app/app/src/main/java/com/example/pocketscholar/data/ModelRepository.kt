@@ -54,7 +54,7 @@ class ModelRepository(private val context: Context) {
         return if (file.exists()) file.absolutePath else null
     }
 
-    // ── Aktif Model ──
+    // ── Active Model ──
 
     fun getActiveModelId(): String? = prefs.getString(KEY_ACTIVE_MODEL_ID, null)
 
@@ -62,28 +62,64 @@ class ModelRepository(private val context: Context) {
         prefs.edit().putString(KEY_ACTIVE_MODEL_ID, modelId).apply()
     }
 
+    fun clearActiveModel() {
+        prefs.edit().remove(KEY_ACTIVE_MODEL_ID).apply()
+    }
+
     fun getActiveModelPath(): String? {
         val activeId = getActiveModelId() ?: return null
         return getModelPath(activeId)
     }
 
-    /**
-     * Aktif bir model yoksa, cihazda mevcut olan herhangi bir modeli bul.
-     * Eski findModelFile() mantığını da destekler (model.gguf, Download klasörü).
-     */
-    fun findAnyAvailableModelPath(): String? {
-        // 1) Aktif model varsa onu döndür
-        getActiveModelPath()?.let { return it }
+    /** Returns the ModelInfo for the currently active model, or null. */
+    fun getActiveModelInfo(): ModelInfo? {
+        val activeId = getActiveModelId() ?: return null
+        return findModel(activeId)
+    }
 
-        // 2) İndirilmiş modellerden birini seç
+    /**
+     * Find the best downloaded model matching the target quantization.
+     *
+     * Priority:
+     *  1. Active model, if it matches the target quantization
+     *  2. Any downloaded model with the target quantization
+     *  3. Fallback: any downloaded model (regardless of quantization)
+     *  4. Legacy: model.gguf in app dir or Downloads folder
+     *
+     * Returns the model path, or null if nothing is available.
+     */
+    fun findBestModelForQuantization(targetQuantization: QuantizationMode): String? {
         val downloadedIds = getDownloadedModelIds()
-        if (downloadedIds.isNotEmpty()) {
-            val firstId = downloadedIds.first()
-            setActiveModelId(firstId)
-            return getModelPath(firstId)
+
+        // 1) Active model matches target quantization?
+        val activeId = getActiveModelId()
+        if (activeId != null && activeId in downloadedIds) {
+            val activeModel = findModel(activeId)
+            if (activeModel?.quantization == targetQuantization) {
+                return getModelPath(activeId)
+            }
         }
 
-        // 3) Eski yaklaşım: uygulama dizininde veya Download'da model.gguf ara
+        // 2) Any downloaded model with the target quantization
+        val matchingModel = AvailableModels.list
+            .filter { it.id in downloadedIds && it.quantization == targetQuantization }
+            .firstOrNull()
+        if (matchingModel != null) {
+            setActiveModelId(matchingModel.id)
+            Log.d(TAG, "Selected model for ${targetQuantization.label}: ${matchingModel.name}")
+            return getModelPath(matchingModel.id)
+        }
+
+        // 3) Fallback: any downloaded model regardless of quantization
+        if (downloadedIds.isNotEmpty()) {
+            val fallbackId = downloadedIds.first()
+            setActiveModelId(fallbackId)
+            val fallbackModel = findModel(fallbackId)
+            Log.d(TAG, "Fallback model (no ${targetQuantization.label} available): ${fallbackModel?.name}")
+            return getModelPath(fallbackId)
+        }
+
+        // 4) Legacy: model.gguf in app dir or Downloads folder
         val appDir = context.getExternalFilesDir(null)
         if (appDir != null) {
             val f = File(appDir, "model.gguf")
@@ -97,6 +133,15 @@ class ModelRepository(private val context: Context) {
         }?.let { return it.absolutePath }
 
         return null
+    }
+
+    /**
+     * Legacy method — finds any available model path without quantization preference.
+     * Kept for backward compatibility.
+     */
+    fun findAnyAvailableModelPath(): String? {
+        getActiveModelPath()?.let { return it }
+        return findBestModelForQuantization(QuantizationMode.Q4_K_M)
     }
 
     // ── İndirme ──

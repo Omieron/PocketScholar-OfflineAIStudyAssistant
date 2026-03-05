@@ -7,6 +7,7 @@ import com.example.pocketscholar.data.AvailableModels
 import com.example.pocketscholar.data.DownloadStatus
 import com.example.pocketscholar.data.ModelInfo
 import com.example.pocketscholar.data.ModelRepository
+import com.example.pocketscholar.engine.EmbeddingEngine
 import com.example.pocketscholar.engine.LlamaEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -25,7 +26,11 @@ data class ModelManagerUiState(
     val downloadProgress: Int = 0,  // 0-100
     val isLoadingModel: Boolean = false,
     val error: String? = null,
-    val successMessage: String? = null
+    val successMessage: String? = null,
+    // Embedding (TFLite) model durumu
+    val isEmbeddingModelLoaded: Boolean = false,
+    val embeddingDimension: Int? = null,
+    val embeddingWarning: String? = null
 )
 
 class ModelManagerViewModel(application: Application) : AndroidViewModel(application) {
@@ -34,9 +39,28 @@ class ModelManagerViewModel(application: Application) : AndroidViewModel(applica
     val uiState: StateFlow<ModelManagerUiState> = _uiState.asStateFlow()
 
     private val modelRepo = ModelRepository(application)
+    private val embeddingEngine = EmbeddingEngine(application)
 
     init {
         refresh()
+        // Embedding model durumu: RAG aramalarında semantik benzerlik kullanılabilecek mi?
+        viewModelScope.launch(Dispatchers.IO) {
+            // Basit warmup: interpreter yoksa veya inference hata verirse tüm değerler 0 döner
+            val warmup = embeddingEngine.embed("warmup")
+            val loaded = embeddingEngine.isModelLoaded() && warmup.any { it != 0f }
+            val dim = if (loaded) embeddingEngine.embeddingDimension() else null
+            _uiState.update {
+                it.copy(
+                    isEmbeddingModelLoaded = loaded,
+                    embeddingDimension = dim,
+                    embeddingWarning = if (!loaded) {
+                        "Embedding modeli yüklenemedi. PDF aramalarında semantik benzerlik kullanılamayacak; lütfen assets içine 'embedding_model.tflite' ekleyin veya uyumlu bir modeli uygulamaya dahil edin."
+                    } else {
+                        null
+                    }
+                )
+            }
+        }
     }
 
     fun refresh() {
