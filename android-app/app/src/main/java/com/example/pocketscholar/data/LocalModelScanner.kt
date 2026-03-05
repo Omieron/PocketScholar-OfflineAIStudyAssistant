@@ -5,13 +5,12 @@ import android.os.Environment
 import android.util.Log
 import java.io.File
 
-/**
- * Cihazda zaten bulunan GGUF modellerini tarar.
- *
- * Aranan konumlar:
- * - app files: context.filesDir (özellikle model.gguf ve *.gguf)
- * - public Downloads klasörü: /sdcard/Download/*.gguf
- */
+
+ // Cihazda zaten bulunan GGUF modellerini tarar.
+ // Aranan konumlar:
+ // - app files: context.filesDir (özellikle model.gguf ve *.gguf)
+ // - public Downloads klasörü: /sdcard/Download/*.gguf
+
 object LocalModelScanner {
 
     private const val TAG = "LocalModelScanner"
@@ -79,5 +78,3 @@ object LocalModelScanner {
         }
     }
 }
-
-*/

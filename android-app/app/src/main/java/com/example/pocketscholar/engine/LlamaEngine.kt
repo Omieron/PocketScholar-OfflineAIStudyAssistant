@@ -51,6 +51,15 @@ object LlamaEngine {
     fun isModelLoaded(): Boolean = isLoadedFlag
 
     /**
+     * SharedPreferences'ta kayıtlı (varsa) son model yolunu döner; dosyanın hala var olup
+     * olmadığını kontrol ETMEZ, sadece string'i okur.
+     */
+    fun getPersistedModelPath(context: Context): String? {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getString(KEY_MODEL_PATH, null)
+    }
+
+    /**
      * Modeli belirtilen path'ten yükler, başarılı olursa SharedPreferences'a kaydeder.
      * JNI çağrısı başarısız olursa anlamlı log mesajı üretir ve false döner.
      */
@@ -119,5 +128,19 @@ object LlamaEngine {
             isLoadedFlag = false
             currentModelPath = null
         }
+    }
+
+    /**
+     * Persisted model bilgisini temizler (SharedPreferences) ve lokal state'i sıfırlar.
+     * Genellikle kullanıcı "modeli kaldır" dediğinde çağrılır.
+     */
+    fun clearPersistedModel(context: Context) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit()
+            .remove(KEY_MODEL_PATH)
+            .remove(KEY_MODEL_LAST_LOADED_AT)
+            .apply()
+        isLoadedFlag = false
+        currentModelPath = null
     }
 }
