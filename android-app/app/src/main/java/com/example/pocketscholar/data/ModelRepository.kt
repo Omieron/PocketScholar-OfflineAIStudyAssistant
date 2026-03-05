@@ -166,6 +166,7 @@ class ModelRepository(private val context: Context) {
             .setDestinationInExternalFilesDir(context, null, "$MODELS_DIR/${modelInfo.fileName}")
             .setAllowedOverMetered(true)
             .setAllowedOverRoaming(false)
+            .addRequestHeader("User-Agent", "PocketScholar/1.0 (Android; https://github.com/pocketscholar)")
 
         val downloadId = downloadManager.enqueue(request)
         // Download ID'yi kaydet
@@ -201,8 +202,10 @@ class ModelRepository(private val context: Context) {
                         DownloadProgress(total, total, DownloadStatus.COMPLETED)
                     }
                     DownloadManager.STATUS_FAILED -> {
+                        val reason = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON))
+                        Log.w(TAG, "Download failed for modelId=$modelId, reason=$reason")
                         clearDownloadId(modelId)
-                        DownloadProgress(0, 0, DownloadStatus.FAILED)
+                        DownloadProgress(0, 0, DownloadStatus.FAILED, failureReason = reason)
                     }
                     else -> null
                 }
@@ -269,7 +272,8 @@ class ModelRepository(private val context: Context) {
 data class DownloadProgress(
     val downloadedBytes: Long,
     val totalBytes: Long,
-    val status: DownloadStatus
+    val status: DownloadStatus,
+    val failureReason: Int = 0
 ) {
     val percent: Int
         get() = if (totalBytes > 0) ((downloadedBytes * 100) / totalBytes).toInt() else 0

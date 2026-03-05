@@ -195,11 +195,15 @@ class ModelManagerViewModel(application: Application) : AndroidViewModel(applica
                         return@launch
                     }
                     DownloadStatus.FAILED -> {
+                        val errorMsg = when (progress.failureReason) {
+                            1006 -> "Yeterli depolama alanı yok. Daha küçük bir model (Q4) deneyin veya cihazda yer açın."
+                            else -> "İndirme başarısız oldu. Farklı bir model deneyin veya ağ bağlantınızı kontrol edin."
+                        }
                         _uiState.update {
                             it.copy(
                                 downloadingModelId = null,
                                 downloadProgress = 0,
-                                error = "İndirme başarısız oldu. Lütfen internet bağlantınızı kontrol edin."
+                                error = errorMsg
                             )
                         }
                         return@launch
