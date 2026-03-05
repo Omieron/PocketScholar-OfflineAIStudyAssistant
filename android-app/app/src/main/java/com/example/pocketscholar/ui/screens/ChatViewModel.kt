@@ -33,6 +33,8 @@ data class ChatUiState(
     val selectedDocumentIds: Set<String> = emptySet()
 )
 
+private const val CONVERSATION_HISTORY_MAX_MESSAGES = 6  // last 3 user/assistant pairs for multi-turn context
+
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
@@ -100,9 +102,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     if (!LlamaEngine.isModelLoaded()) {
                         return@withContext "Model henüz yüklenmedi. Cevap üretmek için Ayarlar > LLM Model bölümünden cihazınızdaki bir GGUF dosyasını seçip modeli yükleyin."
                     }
+                    // Multi-turn: last N messages (user/assistant pairs) as conversation history
+                    val allMessages = _uiState.value.messages
+                    val historyMessages = allMessages.dropLast(1).takeLast(CONVERSATION_HISTORY_MAX_MESSAGES)
+                    val conversationHistory = buildConversationPairs(historyMessages)
                     val result = RagService.ask(
                         query = text,
                         vectorStore = vectorStore,
+                        conversationHistory = conversationHistory.ifEmpty { null },
                         documentIds = documentIdsForRag,
                         skipRagContext = skipRagContext
                     )
@@ -128,6 +135,23 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 )
             }
         }
+    }
+
+    /** Builds (user, assistant) pairs from a list of messages for RAG conversation history. */
+    private fun buildConversationPairs(messages: List<ChatMessage>): List<Pair<String, String>> {
+        val pairs = mutableListOf<Pair<String, String>>()
+        var i = 0
+        while (i < messages.size - 1) {
+            val u = messages[i]
+            val a = messages[i + 1]
+            if (u.role == "user" && a.role == "assistant") {
+                pairs.add(u.text to a.text)
+                i += 2
+            } else {
+                i++
+            }
+        }
+        return pairs
     }
 }
 
